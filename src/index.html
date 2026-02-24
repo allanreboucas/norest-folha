@@ -39,6 +39,9 @@
         .view-section { display: none; }
         .view-section.active { display: block; }
         .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .mob-nav-btn { flex: 1; padding: 10px 4px 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: #64748b; transition: color 0.15s; border: none; background: none; }
+        .mob-nav-btn.active { color: #60a5fa; }
+        .mob-nav-btn span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-slate-800">
@@ -79,16 +82,16 @@
 
     <div id="app-container" class="hidden h-screen w-full flex-col md:flex-row overflow-hidden">
         
-        <aside class="w-full md:w-64 bg-slate-900 text-slate-400 flex flex-col border-r border-slate-800 shadow-2xl z-20">
+        <aside class="hidden md:flex md:w-64 bg-slate-900 text-slate-400 flex-col border-r border-slate-800 shadow-2xl z-20">
             <div class="p-6 border-b border-slate-800 font-bold text-white text-center tracking-widest text-sm uppercase">Norest Gestão</div>
             <nav class="flex-1 p-4 space-y-2">
-                <div onclick="app.navigate('folha', event)" class="sidebar-item active p-3 rounded-lg cursor-pointer flex items-center gap-3 transition">
+                <div data-view="folha" onclick="app.navigate('folha')" class="sidebar-item active p-3 rounded-lg cursor-pointer flex items-center gap-3 transition">
                     <i class="fas fa-calendar-check w-5"></i> <span>Apontamento</span>
                 </div>
-                <div onclick="app.navigate('obras', event)" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
+                <div data-view="obras" onclick="app.navigate('obras')" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
                     <i class="fas fa-hammer w-5"></i> <span>Obras</span>
                 </div>
-                <div onclick="app.navigate('equipe', event)" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
+                <div data-view="equipe" onclick="app.navigate('equipe')" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
                     <i class="fas fa-users w-5"></i> <span>Equipe</span>
                 </div>
             </nav>
@@ -102,26 +105,32 @@
         </aside>
 
         <main class="flex-1 flex flex-col overflow-hidden">
-            <header class="bg-white border-b p-4 md:px-8 flex justify-between items-center shadow-sm gap-4">
-                <div class="min-w-0">
-                    <h2 id="page-title" class="text-lg font-bold text-slate-800">LANÇAMENTO DE FREQUÊNCIA</h2>
-                    <div id="folha-controls-sub" class="flex items-center gap-2 mt-0.5">
-                        <button onclick="app.navSemana(-1)" class="text-slate-400 hover:text-norest-blue transition px-1"><i class="fas fa-chevron-left text-xs"></i></button>
-                        <span id="semana-label" class="text-[10px] text-gray-400 font-mono uppercase tracking-widest">—</span>
-                        <button onclick="app.navSemana(1)" class="text-slate-400 hover:text-norest-blue transition px-1"><i class="fas fa-chevron-right text-xs"></i></button>
+            <header class="bg-white border-b shadow-sm">
+                <div class="px-4 md:px-8 pt-3 pb-1 flex items-center justify-between gap-2">
+                    <h2 id="page-title" class="text-base md:text-lg font-bold text-slate-800 truncate">LANÇAMENTO DE FREQUÊNCIA</h2>
+                    <div class="md:hidden flex items-center gap-2 shrink-0">
+                        <span id="user-tag-mob" class="text-[10px] text-blue-400 font-bold"></span>
+                        <button onclick="auth.logout()" class="text-slate-400 hover:text-red-500 transition-colors text-sm"><i class="fas fa-power-off"></i></button>
                     </div>
                 </div>
-                <div id="folha-controls-right" class="flex items-center gap-2 shrink-0">
-                    <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold max-w-[200px]">
-                        <option value="">Carregando...</option>
-                    </select>
-                    <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap">
-                        <i class="fas fa-save mr-1"></i> SALVAR
-                    </button>
+                <div id="folha-controls-bar" class="px-4 md:px-8 pb-3 flex items-center gap-2">
+                    <div id="folha-controls-sub" class="flex items-center gap-1 shrink-0">
+                        <button onclick="app.navSemana(-1)" class="text-slate-400 hover:text-norest-blue transition w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-left text-xs"></i></button>
+                        <span id="semana-label" class="text-[10px] text-gray-400 font-mono uppercase tracking-widest whitespace-nowrap">—</span>
+                        <button onclick="app.navSemana(1)" class="text-slate-400 hover:text-norest-blue transition w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-right text-xs"></i></button>
+                    </div>
+                    <div id="folha-controls-right" class="flex items-center gap-2 flex-1 justify-end min-w-0">
+                        <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold min-w-0 flex-1 max-w-[200px]">
+                            <option value="">Carregando...</option>
+                        </select>
+                        <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap shrink-0">
+                            <i class="fas fa-save"></i><span class="hidden md:inline ml-1">SALVAR</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50">
+            <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50 pb-20 md:pb-8">
                 
                 <section id="view-folha" class="view-section active animate-fade-in">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -139,21 +148,23 @@
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-[1000px]">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
-                                <tr>
-                                    <th class="p-4 text-left w-72 border-r">Colaborador / Função</th>
-                                    <th class="p-2 border-r">DOM</th><th class="p-2 border-r">SEG</th>
-                                    <th class="p-2 border-r">TER</th><th class="p-2 border-r">QUA</th>
-                                    <th class="p-2 border-r">QUI</th><th class="p-2 border-r">SEX</th>
-                                    <th class="p-2 border-r">SAB</th>
-                                    <th class="p-4 bg-slate-100 border-l">DIAS</th>
-                                    <th class="p-4 bg-blue-50 text-norest-blue border-l font-black">A PAGAR</th>
-                                </tr>
-                            </thead>
-                            <tbody id="grid-body" class="divide-y divide-gray-100"></tbody>
-                        </table>
+                    <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+                        <div class="bg-white overflow-hidden min-w-[660px]">
+                            <table class="w-full text-sm border-collapse">
+                                <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
+                                    <tr>
+                                        <th class="p-3 text-left w-52 border-r">Colaborador / Função</th>
+                                        <th class="p-2 border-r">DOM</th><th class="p-2 border-r">SEG</th>
+                                        <th class="p-2 border-r">TER</th><th class="p-2 border-r">QUA</th>
+                                        <th class="p-2 border-r">QUI</th><th class="p-2 border-r">SEX</th>
+                                        <th class="p-2 border-r">SAB</th>
+                                        <th class="p-3 bg-slate-100 border-l">DIAS</th>
+                                        <th class="p-3 bg-blue-50 text-norest-blue border-l font-black">A PAGAR</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grid-body" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 
@@ -164,21 +175,23 @@
                             <i class="fas fa-plus mr-2"></i> Nova Obra
                         </button>
                     </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
-                                <tr>
-                                    <th class="p-4 text-left border-r">Código</th>
-                                    <th class="p-4 text-left border-r">Nome da Obra</th>
-                                    <th class="p-4 text-left border-r">Eng. Responsável</th>
-                                    <th class="p-4 text-left border-r">Cadastro</th>
-                                    <th class="p-4 text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="obras-body">
-                                <tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+                        <div class="bg-white overflow-hidden min-w-[480px]">
+                            <table class="w-full text-sm border-collapse">
+                                <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
+                                    <tr>
+                                        <th class="p-4 text-left border-r">Código</th>
+                                        <th class="p-4 text-left border-r">Nome da Obra</th>
+                                        <th class="p-4 text-left border-r">Eng. Responsável</th>
+                                        <th class="p-4 text-left border-r">Cadastro</th>
+                                        <th class="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="obras-body">
+                                    <tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 
@@ -189,31 +202,49 @@
                             <i class="fas fa-plus mr-2"></i> Novo Colaborador
                         </button>
                     </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
-                                <tr>
-                                    <th class="p-4 text-left border-r">CPF</th>
-                                    <th class="p-4 text-left border-r">Nome</th>
-                                    <th class="p-4 text-left border-r">Função</th>
-                                    <th class="p-4 text-left border-r">Diária</th>
-                                    <th class="p-4 text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="equipe-body">
-                                <tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+                        <div class="bg-white overflow-hidden min-w-[480px]">
+                            <table class="w-full text-sm border-collapse">
+                                <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
+                                    <tr>
+                                        <th class="p-4 text-left border-r">CPF</th>
+                                        <th class="p-4 text-left border-r">Nome</th>
+                                        <th class="p-4 text-left border-r">Função</th>
+                                        <th class="p-4 text-left border-r">Diária</th>
+                                        <th class="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="equipe-body">
+                                    <tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
             </div>
         </main>
     </div>
 
+    <!-- BOTTOM NAV (mobile only) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-30">
+        <button data-view="folha" onclick="app.navigate('folha')" class="mob-nav-btn active">
+            <i class="fas fa-calendar-check text-base"></i>
+            <span>Apontamento</span>
+        </button>
+        <button data-view="obras" onclick="app.navigate('obras')" class="mob-nav-btn">
+            <i class="fas fa-hammer text-base"></i>
+            <span>Obras</span>
+        </button>
+        <button data-view="equipe" onclick="app.navigate('equipe')" class="mob-nav-btn">
+            <i class="fas fa-users text-base"></i>
+            <span>Equipe</span>
+        </button>
+    </nav>
+
     <!-- Modal: Novo Colaborador / Editar Colaborador -->
-    <div id="modal-colab" class="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl border border-gray-200 animate-fade-in">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+    <div id="modal-colab" class="fixed inset-0 z-[200] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="glass-panel w-full md:max-w-md rounded-t-2xl md:rounded-xl shadow-2xl border border-gray-200 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-sm">
                 <h3 id="modal-colab-titulo" class="font-bold text-slate-800 text-sm uppercase tracking-widest">Novo Colaborador</h3>
                 <button onclick="equipe.fecharModal()" class="text-slate-400 hover:text-slate-700 transition"><i class="fas fa-times"></i></button>
             </div>
@@ -244,9 +275,9 @@
     </div>
 
     <!-- Modal: Nova Obra / Editar Obra -->
-    <div id="modal-obra" class="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl border border-gray-200 animate-fade-in">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+    <div id="modal-obra" class="fixed inset-0 z-[200] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="glass-panel w-full md:max-w-md rounded-t-2xl md:rounded-xl shadow-2xl border border-gray-200 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-sm">
                 <h3 id="modal-obra-titulo" class="font-bold text-slate-800 text-sm uppercase tracking-widest">Nova Obra</h3>
                 <button onclick="obras.fecharModal()" class="text-slate-400 hover:text-slate-700 transition"><i class="fas fa-times"></i></button>
             </div>
@@ -306,6 +337,7 @@
                     document.getElementById('auth-screen').classList.add('hidden');
                     document.getElementById('app-container').classList.replace('hidden', 'flex');
                     document.getElementById('user-tag').innerText = u;
+                    document.getElementById('user-tag-mob').innerText = u;
                     showToast(`Bem-vindo, ${u}!`);
                     app.init();
                 } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
@@ -485,7 +517,7 @@
                 if (!this.config.obraAtiva) { showToast('Nenhuma obra selecionada.', 'warn'); return; }
                 const btn = document.getElementById('btn-salvar-semana');
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Salvando...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 try {
                     const res = await fetch('/api/folha', {
                         method: 'POST',
@@ -504,20 +536,25 @@
                     showToast(e.message, 'error');
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save mr-1"></i> SALVAR';
+                    btn.innerHTML = '<i class="fas fa-save"></i><span class="hidden md:inline ml-1">SALVAR</span>';
                 }
             },
 
-            navigate(viewId, event) {
+            navigate(viewId) {
+                // Sidebar desktop
                 document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
-                event.currentTarget.classList.add('active');
+                const sidebarItem = document.querySelector(`.sidebar-item[data-view="${viewId}"]`);
+                if (sidebarItem) sidebarItem.classList.add('active');
+                // Bottom nav mobile
+                document.querySelectorAll('.mob-nav-btn').forEach(el => el.classList.remove('active'));
+                const mobBtn = document.querySelector(`.mob-nav-btn[data-view="${viewId}"]`);
+                if (mobBtn) mobBtn.classList.add('active');
+                // Views
                 document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
                 document.getElementById('view-' + viewId).classList.add('active');
                 const titles = { 'folha': 'LANÇAMENTO DE FREQUÊNCIA', 'obras': 'GESTÃO DE CANTEIROS', 'equipe': 'GESTÃO DE EQUIPE' };
                 document.getElementById('page-title').innerText = titles[viewId];
-                const isFolha = viewId === 'folha';
-                document.getElementById('folha-controls-sub').style.display = isFolha ? '' : 'none';
-                document.getElementById('folha-controls-right').style.display = isFolha ? '' : 'none';
+                document.getElementById('folha-controls-bar').style.display = viewId === 'folha' ? '' : 'none';
                 if (viewId === 'obras') obras.load();
                 if (viewId === 'equipe') equipe.load();
             }
