@@ -102,10 +102,22 @@
         </aside>
 
         <main class="flex-1 flex flex-col overflow-hidden">
-            <header class="bg-white border-b p-4 md:px-8 flex justify-between items-center shadow-sm">
-                <div>
+            <header class="bg-white border-b p-4 md:px-8 flex justify-between items-center shadow-sm gap-4">
+                <div class="min-w-0">
                     <h2 id="page-title" class="text-lg font-bold text-slate-800">LANÇAMENTO DE FREQUÊNCIA</h2>
-                    <p class="text-[10px] text-gray-400 font-mono uppercase tracking-widest" id="header-subtitle">Obra: ON021.RANIERI | 2026-W08</p>
+                    <div id="folha-controls-sub" class="flex items-center gap-2 mt-0.5">
+                        <button onclick="app.navSemana(-1)" class="text-slate-400 hover:text-norest-blue transition px-1"><i class="fas fa-chevron-left text-xs"></i></button>
+                        <span id="semana-label" class="text-[10px] text-gray-400 font-mono uppercase tracking-widest">—</span>
+                        <button onclick="app.navSemana(1)" class="text-slate-400 hover:text-norest-blue transition px-1"><i class="fas fa-chevron-right text-xs"></i></button>
+                    </div>
+                </div>
+                <div id="folha-controls-right" class="flex items-center gap-2 shrink-0">
+                    <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold max-w-[200px]">
+                        <option value="">Carregando...</option>
+                    </select>
+                    <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap">
+                        <i class="fas fa-save mr-1"></i> SALVAR
+                    </button>
                 </div>
             </header>
 
@@ -314,81 +326,201 @@
             msg: (t, c="text-red-500") => { const el = document.getElementById('auth-msg'); el.innerText = t; el.className = `text-xs font-bold mt-4 h-4 ${c}`; }
         };
 
-        // --- MOTOR SMART GRID (Integrado) ---
+        // --- MOTOR SMART GRID ---
         const app = {
-            data: null,
-            config: { obraAtiva: 'ON021.RANIERI', semanaAtiva: '2026-W08' },
+            config: { obraAtiva: null, semanaAtiva: null },
+            colaboradores: [],
+            obrasList: [],
+            registros: [],
 
-            init: function() {
-                this.data = { colaboradores: [], obras: [], fechamentos: {} };
-                if (!this.data.fechamentos[this.config.semanaAtiva]) {
-                    this.data.fechamentos[this.config.semanaAtiva] = { registros: [] };
+            semanaAtual() {
+                const hoje = new Date();
+                const dom = new Date(hoje);
+                dom.setDate(hoje.getDate() - hoje.getDay());
+                dom.setHours(0, 0, 0, 0);
+                return dom;
+            },
+
+            toKey(date) {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            },
+
+            formatarIntervalo(key) {
+                const dom = new Date(key + 'T12:00:00');
+                const sab = new Date(dom);
+                sab.setDate(dom.getDate() + 6);
+                const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+                return `${fmt(dom)} – ${fmt(sab)}/${sab.getFullYear()}`;
+            },
+
+            async init() {
+                this.config.semanaAtiva = this.toKey(this.semanaAtual());
+                document.getElementById('semana-label').innerText = this.formatarIntervalo(this.config.semanaAtiva);
+
+                const [obrasData, colabData] = await Promise.all([
+                    fetch('/api/obras').then(r => r.json()).catch(() => []),
+                    fetch('/api/funcionarios').then(r => r.json()).catch(() => [])
+                ]);
+
+                this.obrasList = Array.isArray(obrasData) ? obrasData : [];
+                this.colaboradores = Array.isArray(colabData) ? colabData : [];
+
+                const sel = document.getElementById('select-obra');
+                if (this.obrasList.length) {
+                    sel.innerHTML = this.obrasList
+                        .sort((a, b) => b.criado_em - a.criado_em)
+                        .map(o => `<option value="${o.id}">${o.id} — ${o.nome}</option>`)
+                        .join('');
+                    this.config.obraAtiva = sel.value;
+                } else {
+                    sel.innerHTML = '<option value="">Nenhuma obra cadastrada</option>';
+                    this.config.obraAtiva = null;
+                }
+
+                await this.carregarFolha();
+            },
+
+            navSemana(delta) {
+                const atual = new Date(this.config.semanaAtiva + 'T12:00:00');
+                atual.setDate(atual.getDate() + delta * 7);
+                this.config.semanaAtiva = this.toKey(atual);
+                document.getElementById('semana-label').innerText = this.formatarIntervalo(this.config.semanaAtiva);
+                this.carregarFolha();
+            },
+
+            trocarObra() {
+                this.config.obraAtiva = document.getElementById('select-obra').value;
+                this.carregarFolha();
+            },
+
+            async carregarFolha() {
+                if (!this.config.obraAtiva) {
+                    this.registros = [];
+                    this.renderGrid();
+                    return;
+                }
+                try {
+                    const res = await fetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`);
+                    const data = await res.json();
+                    const salvos = data.registros || [];
+
+                    this.registros = this.colaboradores.map(c => {
+                        const salvo = salvos.find(r => r.cpf === c.cpf);
+                        if (salvo) return salvo;
+                        return {
+                            cpf: c.cpf,
+                            nome: c.nome,
+                            funcao: c.funcao,
+                            diaria_historica: c.diaria,
+                            freq: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null }
+                        };
+                    });
+                } catch(e) {
+                    this.registros = [];
                 }
                 this.renderGrid();
             },
 
-            navigate: function(viewId, event) {
+            renderGrid() {
+                const tbody = document.getElementById('grid-body');
+                const diasLabel = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+
+                if (!this.config.obraAtiva) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada. Acesse <b>Obras</b> para cadastrar.</td></tr>';
+                    document.getElementById('stat-total').innerText = 'R$ 0,00';
+                    document.getElementById('stat-presentes').innerText = '0';
+                    document.getElementById('stat-media').innerText = 'R$ 0,00';
+                    return;
+                }
+
+                if (!this.registros.length) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado. Acesse <b>Equipe</b> para cadastrar.</td></tr>';
+                    document.getElementById('stat-total').innerText = 'R$ 0,00';
+                    document.getElementById('stat-presentes').innerText = '0';
+                    document.getElementById('stat-media').innerText = 'R$ 0,00';
+                    return;
+                }
+
+                let totalObra = 0, totalPresentes = 0;
+
+                tbody.innerHTML = this.registros.map((reg, idx) => {
+                    const somaDias = diasLabel.reduce((a, d) => a + (reg.freq[d] || 0), 0);
+                    const aPagar = somaDias * reg.diaria_historica;
+                    totalObra += aPagar;
+                    if (somaDias > 0) totalPresentes++;
+
+                    const cells = diasLabel.map(d => {
+                        const v = reg.freq[d];
+                        const cls = v === 1.0 ? 'p-full' : (v === 0.5 ? 'p-half' : (v === 0.0 ? 'p-none' : 'p-null'));
+                        return `<td onclick="app.toggle(${idx},'${d}')" class="cell-active ${cls} text-center text-[10px] font-black border-r">${v == null ? '-' : v.toFixed(1)}</td>`;
+                    }).join('');
+
+                    return `<tr class="hover:bg-slate-50 transition group">
+                        <td class="p-4 text-left border-r group-hover:bg-white transition-colors">
+                            <div class="font-bold text-slate-700">${reg.nome}</div>
+                            <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${reg.funcao}</div>
+                        </td>
+                        ${cells}
+                        <td class="p-4 bg-slate-50 text-center font-bold text-slate-600">${somaDias.toFixed(1)}</td>
+                        <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    </tr>`;
+                }).join('');
+
+                document.getElementById('stat-total').innerText = totalObra.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                document.getElementById('stat-presentes').innerText = totalPresentes;
+                document.getElementById('stat-media').innerText = (totalPresentes > 0 ? totalObra / totalPresentes : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            },
+
+            toggle(idx, dia) {
+                const reg = this.registros[idx];
+                const seq = [null, 1.0, 0.5, 0.0];
+                reg.freq[dia] = seq[(seq.indexOf(reg.freq[dia]) + 1) % seq.length];
+                this.renderGrid();
+            },
+
+            async salvarSemana() {
+                if (!this.config.obraAtiva) { showToast('Nenhuma obra selecionada.', 'warn'); return; }
+                const btn = document.getElementById('btn-salvar-semana');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Salvando...';
+                try {
+                    const res = await fetch('/api/folha', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            username: auth.currentUser,
+                            password: auth.passCache,
+                            obra: this.config.obraAtiva,
+                            semana: this.config.semanaAtiva,
+                            registros: this.registros
+                        })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    showToast('Frequência salva com sucesso!');
+                } catch(e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save mr-1"></i> SALVAR';
+                }
+            },
+
+            navigate(viewId, event) {
                 document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
                 event.currentTarget.classList.add('active');
                 document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
                 document.getElementById('view-' + viewId).classList.add('active');
                 const titles = { 'folha': 'LANÇAMENTO DE FREQUÊNCIA', 'obras': 'GESTÃO DE CANTEIROS', 'equipe': 'GESTÃO DE EQUIPE' };
                 document.getElementById('page-title').innerText = titles[viewId];
+                const isFolha = viewId === 'folha';
+                document.getElementById('folha-controls-sub').style.display = isFolha ? '' : 'none';
+                document.getElementById('folha-controls-right').style.display = isFolha ? '' : 'none';
                 if (viewId === 'obras') obras.load();
                 if (viewId === 'equipe') equipe.load();
-            },
-
-            renderGrid: function() {
-                const tbody = document.getElementById('grid-body');
-                tbody.innerHTML = '';
-                const semana = this.data.fechamentos[this.config.semanaAtiva];
-                const diasLabel = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-                
-                let totalObra = 0; let totalPresentesHoje = 0;
-
-                this.data.colaboradores.forEach(colab => {
-                    let reg = semana.registros.find(r => r.colabId === colab.id && r.obraId === this.config.obraAtiva);
-                    if (!reg) { reg = { colabId: colab.id, obraId: this.config.obraAtiva, diaria: colab.diaria, freq: {} }; semana.registros.push(reg); }
-
-                    const somaDias = Object.values(reg.freq).reduce((a, b) => a + (b || 0), 0);
-                    const aPagar = somaDias * reg.diaria;
-                    totalObra += aPagar;
-                    
-                    // Lógica para estatística "Presentes Hoje" (exemplo: considera se há algum registro no dia atual)
-                    if(Object.values(reg.freq).some(v => v > 0)) totalPresentesHoje++;
-
-                    const tr = document.createElement('tr');
-                    tr.className = "hover:bg-slate-50 transition group";
-                    let cells = `<td class="p-4 text-left border-r group-hover:bg-white transition-colors">
-                                    <div class="font-bold text-slate-700">${colab.nome}</div>
-                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${colab.funcao}</div>
-                                 </td>`;
-                    
-                    diasLabel.forEach(d => {
-                        const v = reg.freq[d];
-                        const cls = v === 1.0 ? 'p-full' : (v === 0.5 ? 'p-half' : (v === 0.0 ? 'p-none' : 'p-null'));
-                        cells += `<td onclick="app.toggle(${colab.id}, '${d}')" class="cell-active ${cls} text-[10px] font-black border-r">${v == null ? '-' : v.toFixed(1)}</td>`;
-                    });
-
-                    cells += `<td class="p-4 bg-slate-50 font-bold text-slate-600">${somaDias.toFixed(1)}</td>
-                              <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>`;
-                    tr.innerHTML = cells;
-                    tbody.appendChild(tr);
-                });
-
-                // Atualiza KPIs
-                document.getElementById('stat-total').innerText = totalObra.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                document.getElementById('stat-presentes').innerText = totalPresentesHoje;
-                document.getElementById('stat-media').innerText = (totalObra / 7).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            },
-
-            toggle: function(id, dia) {
-                const reg = this.data.fechamentos[this.config.semanaAtiva].registros.find(r => r.colabId == id && r.obraId === this.config.obraAtiva);
-                const seq = [null, 1.0, 0.5, 0.0];
-                reg.freq[dia] = seq[(seq.indexOf(reg.freq[dia]) + 1) % seq.length];
-                this.renderGrid();
-            },
-
+            }
         };
         // --- MÓDULO DE EQUIPE ---
         const equipe = {
