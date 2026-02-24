@@ -159,7 +159,8 @@
                                     <th class="p-4 text-left border-r">Código</th>
                                     <th class="p-4 text-left border-r">Nome da Obra</th>
                                     <th class="p-4 text-left border-r">Eng. Responsável</th>
-                                    <th class="p-4 text-left">Cadastro</th>
+                                    <th class="p-4 text-left border-r">Cadastro</th>
+                                    <th class="p-4 text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="obras-body">
@@ -180,15 +181,15 @@
         </main>
     </div>
 
-    <!-- Modal: Nova Obra -->
+    <!-- Modal: Nova Obra / Editar Obra -->
     <div id="modal-obra" class="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 hidden">
         <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl border border-gray-200 animate-fade-in">
             <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h3 class="font-bold text-slate-800 text-sm uppercase tracking-widest">Nova Obra</h3>
+                <h3 id="modal-obra-titulo" class="font-bold text-slate-800 text-sm uppercase tracking-widest">Nova Obra</h3>
                 <button onclick="obras.fecharModal()" class="text-slate-400 hover:text-slate-700 transition"><i class="fas fa-times"></i></button>
             </div>
             <div class="p-6 space-y-4">
-                <div>
+                <div id="campo-obra-id">
                     <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Código da Obra</label>
                     <input type="text" id="obra-id" placeholder="Ex: ON021.RANIERI" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm font-mono uppercase">
                 </div>
@@ -204,7 +205,7 @@
             </div>
             <div class="p-6 border-t border-gray-100 flex gap-3 justify-end">
                 <button onclick="obras.fecharModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-bold transition">Cancelar</button>
-                <button onclick="obras.criar()" id="btn-criar-obra" class="bg-norest-blue text-white px-6 py-2 rounded-lg text-sm font-bold shadow hover:bg-blue-800 transition active:scale-95">Criar Obra</button>
+                <button id="btn-confirmar-obra" class="bg-norest-blue text-white px-6 py-2 rounded-lg text-sm font-bold shadow hover:bg-blue-800 transition active:scale-95">Criar Obra</button>
             </div>
         </div>
     </div>
@@ -348,23 +349,24 @@
         // --- MÓDULO DE OBRAS ---
         const obras = {
             lista: [],
+            modoEdicao: null, // id da obra sendo editada, ou null
 
             async load() {
                 const tbody = document.getElementById('obras-body');
-                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
                 try {
                     const res = await fetch('/api/obras');
                     this.lista = await res.json();
                     this.render();
                 } catch(e) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-red-400 text-xs">Erro ao carregar obras.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-red-400 text-xs">Erro ao carregar obras.</td></tr>';
                 }
             },
 
             render() {
                 const tbody = document.getElementById('obras-body');
                 if (!this.lista.length) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = this.lista
@@ -374,22 +376,51 @@
                             <td class="p-4 font-mono font-bold text-norest-blue text-xs border-r">${o.id}</td>
                             <td class="p-4 font-semibold text-slate-700 border-r">${o.nome}</td>
                             <td class="p-4 text-slate-600 border-r">${o.engenheiro}</td>
-                            <td class="p-4 text-slate-400 text-xs">${new Date(o.criado_em).toLocaleDateString('pt-BR')}</td>
+                            <td class="p-4 text-slate-400 text-xs border-r">${new Date(o.criado_em).toLocaleDateString('pt-BR')}</td>
+                            <td class="p-4 text-center">
+                                <div class="flex gap-2 justify-center">
+                                    <button onclick="obras.abrirEdicao('${o.id}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                    <button onclick="obras.excluir('${o.id}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
                         </tr>
                     `).join('');
             },
 
             abrirModal() {
+                this.modoEdicao = null;
+                document.getElementById('modal-obra-titulo').innerText = 'Nova Obra';
+                document.getElementById('campo-obra-id').style.display = '';
                 document.getElementById('obra-id').value = '';
                 document.getElementById('obra-nome').value = '';
                 document.getElementById('obra-engenheiro').value = '';
                 document.getElementById('obra-msg').innerText = '';
+                const btn = document.getElementById('btn-confirmar-obra');
+                btn.innerText = 'Criar Obra';
+                btn.onclick = () => obras.criar();
                 document.getElementById('modal-obra').classList.remove('hidden');
                 document.getElementById('obra-id').focus();
             },
 
+            abrirEdicao(id) {
+                const o = this.lista.find(x => x.id === id);
+                if (!o) return;
+                this.modoEdicao = id;
+                document.getElementById('modal-obra-titulo').innerText = 'Editar Obra';
+                document.getElementById('campo-obra-id').style.display = 'none';
+                document.getElementById('obra-nome').value = o.nome;
+                document.getElementById('obra-engenheiro').value = o.engenheiro;
+                document.getElementById('obra-msg').innerText = '';
+                const btn = document.getElementById('btn-confirmar-obra');
+                btn.innerText = 'Salvar Alterações';
+                btn.onclick = () => obras.salvarEdicao();
+                document.getElementById('modal-obra').classList.remove('hidden');
+                document.getElementById('obra-nome').focus();
+            },
+
             fecharModal() {
                 document.getElementById('modal-obra').classList.add('hidden');
+                this.modoEdicao = null;
             },
 
             async criar() {
@@ -398,12 +429,9 @@
                 const engenheiro = document.getElementById('obra-engenheiro').value.trim();
                 const msg = document.getElementById('obra-msg');
 
-                if (!id || !nome || !engenheiro) {
-                    msg.innerText = 'Preencha todos os campos.';
-                    return;
-                }
+                if (!id || !nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
 
-                const btn = document.getElementById('btn-criar-obra');
+                const btn = document.getElementById('btn-confirmar-obra');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Criando...';
 
@@ -422,7 +450,56 @@
                     msg.innerText = e.message;
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = 'Criar Obra';
+                    btn.innerText = 'Criar Obra';
+                }
+            },
+
+            async salvarEdicao() {
+                const nome = document.getElementById('obra-nome').value.trim();
+                const engenheiro = document.getElementById('obra-engenheiro').value.trim();
+                const msg = document.getElementById('obra-msg');
+
+                if (!nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
+
+                const btn = document.getElementById('btn-confirmar-obra');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Salvando...';
+
+                try {
+                    const res = await fetch(`/api/obra/${encodeURIComponent(this.modoEdicao)}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro } })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    const idx = this.lista.findIndex(x => x.id === this.modoEdicao);
+                    if (idx !== -1) { this.lista[idx].nome = nome; this.lista[idx].engenheiro = engenheiro; }
+                    showToast('Obra atualizada com sucesso!');
+                    this.fecharModal();
+                    this.render();
+                } catch(e) {
+                    msg.innerText = e.message;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Salvar Alterações';
+                }
+            },
+
+            async excluir(id) {
+                if (!confirm(`Excluir a obra "${id}"? Esta ação não pode ser desfeita.`)) return;
+
+                try {
+                    const res = await fetch(`/api/obra/${encodeURIComponent(id)}`, {
+                        method: 'DELETE',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    this.lista = this.lista.filter(x => x.id !== id);
+                    showToast('Obra excluída.');
+                    this.render();
+                } catch(e) {
+                    showToast(e.message, 'error');
                 }
             }
         };

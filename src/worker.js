@@ -205,6 +205,53 @@ export default {
       return new Response(JSON.stringify(items.map(JSON.parse)));
     }
 
+    if (request.method === "PUT" && path.startsWith("/api/obra/")) {
+      try {
+        const { username, password, obra } = await request.json();
+
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+
+        const id = decodeURIComponent(path.split("/api/obra/")[1]).toUpperCase();
+        const key = `obra:${id}`;
+
+        const existing = await env.DB.get(key);
+        if (!existing) return new Response(JSON.stringify({ error: "Obra não encontrada." }), { status: 404 });
+
+        if (!obra?.nome || !obra?.engenheiro) {
+          return new Response(JSON.stringify({ error: "Nome e engenheiro são obrigatórios." }), { status: 400 });
+        }
+
+        const current = JSON.parse(existing);
+        await env.DB.put(key, JSON.stringify({ ...current, nome: obra.nome.trim(), engenheiro: obra.engenheiro.trim() }));
+
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao editar obra." }), { status: 500 });
+      }
+    }
+
+    if (request.method === "DELETE" && path.startsWith("/api/obra/")) {
+      try {
+        const { username, password } = await request.json();
+
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+
+        const id = decodeURIComponent(path.split("/api/obra/")[1]).toUpperCase();
+        const key = `obra:${id}`;
+
+        const existing = await env.DB.get(key);
+        if (!existing) return new Response(JSON.stringify({ error: "Obra não encontrada." }), { status: 404 });
+
+        await env.DB.delete(key);
+
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao excluir obra." }), { status: 500 });
+      }
+    }
+
     return new Response("Not Found", { status: 404 });
   },
 };
