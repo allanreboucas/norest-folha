@@ -126,37 +126,92 @@ export default {
         const user = await authenticate(username, password);
         if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
 
-        if (!funcionario?.cpf || !funcionario?.nome) {
-          return new Response(JSON.stringify({ error: "Dados inválidos" }), { status: 400 });
+        if (!funcionario?.cpf || !funcionario?.nome || !funcionario?.funcao || !funcionario?.diaria) {
+          return new Response(JSON.stringify({ error: "CPF, nome, função e diária são obrigatórios." }), { status: 400 });
         }
 
-        const key = `funcionario:${funcionario.cpf}`;
-        const existing = await env.DB.get(key);
+        const cpf = funcionario.cpf.replace(/\D/g, '');
+        if (cpf.length !== 11) {
+          return new Response(JSON.stringify({ error: "CPF inválido." }), { status: 400 });
+        }
 
+        const key = `funcionario:${cpf}`;
+        const existing = await env.DB.get(key);
         if (existing) {
-          return new Response(JSON.stringify({ error: "Funcionário já existe" }), { status: 400 });
+          return new Response(JSON.stringify({ error: "Funcionário já existe." }), { status: 400 });
         }
 
         await env.DB.put(key, JSON.stringify({
-          ...funcionario,
+          cpf,
+          nome: funcionario.nome.trim().toUpperCase(),
+          funcao: funcionario.funcao.trim().toUpperCase(),
+          diaria: parseFloat(funcionario.diaria),
           criado_em: Date.now()
         }));
 
         return new Response(JSON.stringify({ success: true }));
 
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao criar funcionário" }), { status: 500 });
+        return new Response(JSON.stringify({ error: "Erro ao criar funcionário." }), { status: 500 });
       }
     }
 
     if (request.method === "GET" && path === "/api/funcionarios") {
       const list = await env.DB.list({ prefix: "funcionario:" });
-
-      const items = await Promise.all(
-        list.keys.map(k => env.DB.get(k.name))
-      );
-
+      const items = await Promise.all(list.keys.map(k => env.DB.get(k.name)));
       return new Response(JSON.stringify(items.map(JSON.parse)));
+    }
+
+    if (request.method === "PUT" && path.startsWith("/api/funcionario/")) {
+      try {
+        const { username, password, funcionario } = await request.json();
+
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+
+        const cpf = decodeURIComponent(path.split("/api/funcionario/")[1]);
+        const key = `funcionario:${cpf}`;
+
+        const existing = await env.DB.get(key);
+        if (!existing) return new Response(JSON.stringify({ error: "Funcionário não encontrado." }), { status: 404 });
+
+        if (!funcionario?.nome || !funcionario?.funcao || !funcionario?.diaria) {
+          return new Response(JSON.stringify({ error: "Nome, função e diária são obrigatórios." }), { status: 400 });
+        }
+
+        const current = JSON.parse(existing);
+        await env.DB.put(key, JSON.stringify({
+          ...current,
+          nome: funcionario.nome.trim().toUpperCase(),
+          funcao: funcionario.funcao.trim().toUpperCase(),
+          diaria: parseFloat(funcionario.diaria)
+        }));
+
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao editar funcionário." }), { status: 500 });
+      }
+    }
+
+    if (request.method === "DELETE" && path.startsWith("/api/funcionario/")) {
+      try {
+        const { username, password } = await request.json();
+
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+
+        const cpf = decodeURIComponent(path.split("/api/funcionario/")[1]);
+        const key = `funcionario:${cpf}`;
+
+        const existing = await env.DB.get(key);
+        if (!existing) return new Response(JSON.stringify({ error: "Funcionário não encontrado." }), { status: 404 });
+
+        await env.DB.delete(key);
+
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao excluir funcionário." }), { status: 500 });
+      }
     }
 
     // =====================================================================

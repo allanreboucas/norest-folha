@@ -171,14 +171,64 @@
                 </section>
 
                 <section id="view-equipe" class="view-section animate-fade-in">
-                    <div class="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center text-gray-400">
-                        <i class="fas fa-id-card text-5xl mb-4 text-slate-200"></i>
-                        <h3 class="text-lg font-bold text-slate-600">Cadastro de Equipe</h3>
-                        <p class="text-sm">Módulo de admissão e configuração de diárias em desenvolvimento.</p>
+                    <div class="flex justify-between items-center mb-4">
+                        <p class="text-xs text-slate-400 uppercase font-bold tracking-widest">Colaboradores Cadastrados</p>
+                        <button onclick="equipe.abrirModal()" class="bg-norest-blue text-white px-4 py-2 rounded-lg text-xs font-bold shadow hover:bg-blue-800 transition active:scale-95">
+                            <i class="fas fa-plus mr-2"></i> Novo Colaborador
+                        </button>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <table class="w-full text-sm border-collapse">
+                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
+                                <tr>
+                                    <th class="p-4 text-left border-r">CPF</th>
+                                    <th class="p-4 text-left border-r">Nome</th>
+                                    <th class="p-4 text-left border-r">Função</th>
+                                    <th class="p-4 text-left border-r">Diária</th>
+                                    <th class="p-4 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="equipe-body">
+                                <tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             </div>
         </main>
+    </div>
+
+    <!-- Modal: Novo Colaborador / Editar Colaborador -->
+    <div id="modal-colab" class="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl border border-gray-200 animate-fade-in">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 id="modal-colab-titulo" class="font-bold text-slate-800 text-sm uppercase tracking-widest">Novo Colaborador</h3>
+                <button onclick="equipe.fecharModal()" class="text-slate-400 hover:text-slate-700 transition"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="campo-colab-cpf">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">CPF</label>
+                    <input type="text" id="colab-cpf" placeholder="000.000.000-00" maxlength="14" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm font-mono">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nome Completo</label>
+                    <input type="text" id="colab-nome" placeholder="Ex: João da Silva" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Função</label>
+                    <input type="text" id="colab-funcao" placeholder="Ex: Pedreiro" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Diária (R$)</label>
+                    <input type="number" id="colab-diaria" placeholder="Ex: 160" min="0" step="0.01" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm">
+                </div>
+                <p id="colab-msg" class="text-xs font-bold text-red-500 h-4"></p>
+            </div>
+            <div class="p-6 border-t border-gray-100 flex gap-3 justify-end">
+                <button onclick="equipe.fecharModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-bold transition">Cancelar</button>
+                <button id="btn-confirmar-colab" class="bg-norest-blue text-white px-6 py-2 rounded-lg text-sm font-bold shadow hover:bg-blue-800 transition active:scale-95">Cadastrar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal: Nova Obra / Editar Obra -->
@@ -245,7 +295,7 @@
                     document.getElementById('app-container').classList.replace('hidden', 'flex');
                     document.getElementById('user-tag').innerText = u;
                     showToast(`Bem-vindo, ${u}!`);
-                    app.init(json.data);
+                    app.init();
                 } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
             },
             async register() {
@@ -269,15 +319,8 @@
             data: null,
             config: { obraAtiva: 'ON021.RANIERI', semanaAtiva: '2026-W08' },
 
-            init: function(cloudData) {
-                this.data = cloudData || { colaboradores: [], obras: [], fechamentos: {} };
-                if (this.data.colaboradores.length === 0) {
-                    this.data.colaboradores = [
-                        { id: 1, nome: "NETIM", funcao: "PEDREIRO", diaria: 160 },
-                        { id: 2, nome: "VITORIO", funcao: "SERVENTE", diaria: 90 },
-                        { id: 3, nome: "LUIS", funcao: "PEDREIRO", diaria: 160 }
-                    ];
-                }
+            init: function() {
+                this.data = { colaboradores: [], obras: [], fechamentos: {} };
                 if (!this.data.fechamentos[this.config.semanaAtiva]) {
                     this.data.fechamentos[this.config.semanaAtiva] = { registros: [] };
                 }
@@ -292,6 +335,7 @@
                 const titles = { 'folha': 'LANÇAMENTO DE FREQUÊNCIA', 'obras': 'GESTÃO DE CANTEIROS', 'equipe': 'GESTÃO DE EQUIPE' };
                 document.getElementById('page-title').innerText = titles[viewId];
                 if (viewId === 'obras') obras.load();
+                if (viewId === 'equipe') equipe.load();
             },
 
             renderGrid: function() {
@@ -346,6 +390,174 @@
             },
 
         };
+        // --- MÓDULO DE EQUIPE ---
+        const equipe = {
+            lista: [],
+            modoEdicao: null,
+
+            formatCPF(cpf) {
+                return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            },
+
+            async load() {
+                const tbody = document.getElementById('equipe-body');
+                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
+                try {
+                    const res = await fetch('/api/funcionarios');
+                    this.lista = await res.json();
+                    this.render();
+                } catch(e) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</td></tr>';
+                }
+            },
+
+            render() {
+                const tbody = document.getElementById('equipe-body');
+                if (!this.lista.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = this.lista
+                    .sort((a, b) => a.nome.localeCompare(b.nome))
+                    .map(c => `
+                        <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
+                            <td class="p-4 font-mono text-slate-500 text-xs border-r">${this.formatCPF(c.cpf)}</td>
+                            <td class="p-4 font-bold text-slate-700 border-r">${c.nome}</td>
+                            <td class="p-4 text-slate-600 border-r">${c.funcao}</td>
+                            <td class="p-4 text-slate-700 font-semibold border-r">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                            <td class="p-4 text-center">
+                                <div class="flex gap-2 justify-center">
+                                    <button onclick="equipe.abrirEdicao('${c.cpf}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                    <button onclick="equipe.excluir('${c.cpf}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+            },
+
+            abrirModal() {
+                this.modoEdicao = null;
+                document.getElementById('modal-colab-titulo').innerText = 'Novo Colaborador';
+                document.getElementById('campo-colab-cpf').style.display = '';
+                document.getElementById('colab-cpf').value = '';
+                document.getElementById('colab-nome').value = '';
+                document.getElementById('colab-funcao').value = '';
+                document.getElementById('colab-diaria').value = '';
+                document.getElementById('colab-msg').innerText = '';
+                const btn = document.getElementById('btn-confirmar-colab');
+                btn.innerText = 'Cadastrar';
+                btn.onclick = () => equipe.criar();
+                document.getElementById('modal-colab').classList.remove('hidden');
+                document.getElementById('colab-cpf').focus();
+            },
+
+            abrirEdicao(cpf) {
+                const c = this.lista.find(x => x.cpf === cpf);
+                if (!c) return;
+                this.modoEdicao = cpf;
+                document.getElementById('modal-colab-titulo').innerText = 'Editar Colaborador';
+                document.getElementById('campo-colab-cpf').style.display = 'none';
+                document.getElementById('colab-nome').value = c.nome;
+                document.getElementById('colab-funcao').value = c.funcao;
+                document.getElementById('colab-diaria').value = c.diaria;
+                document.getElementById('colab-msg').innerText = '';
+                const btn = document.getElementById('btn-confirmar-colab');
+                btn.innerText = 'Salvar Alterações';
+                btn.onclick = () => equipe.salvarEdicao();
+                document.getElementById('modal-colab').classList.remove('hidden');
+                document.getElementById('colab-nome').focus();
+            },
+
+            fecharModal() {
+                document.getElementById('modal-colab').classList.add('hidden');
+                this.modoEdicao = null;
+            },
+
+            async criar() {
+                const cpf = document.getElementById('colab-cpf').value.trim();
+                const nome = document.getElementById('colab-nome').value.trim();
+                const funcao = document.getElementById('colab-funcao').value.trim();
+                const diaria = document.getElementById('colab-diaria').value.trim();
+                const msg = document.getElementById('colab-msg');
+
+                if (!cpf || !nome || !funcao || !diaria) { msg.innerText = 'Preencha todos os campos.'; return; }
+
+                const btn = document.getElementById('btn-confirmar-colab');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Cadastrando...';
+
+                try {
+                    const res = await fetch('/api/funcionario', {
+                        method: 'POST',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, funcionario: { cpf, nome, funcao, diaria } })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    showToast('Colaborador cadastrado com sucesso!');
+                    const cpfLimpo = cpf.replace(/\D/g, '');
+                    this.lista.push({ cpf: cpfLimpo, nome: nome.toUpperCase(), funcao: funcao.toUpperCase(), diaria: parseFloat(diaria), criado_em: Date.now() });
+                    this.fecharModal();
+                    this.render();
+                } catch(e) {
+                    msg.innerText = e.message;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Cadastrar';
+                }
+            },
+
+            async salvarEdicao() {
+                const nome = document.getElementById('colab-nome').value.trim();
+                const funcao = document.getElementById('colab-funcao').value.trim();
+                const diaria = document.getElementById('colab-diaria').value.trim();
+                const msg = document.getElementById('colab-msg');
+
+                if (!nome || !funcao || !diaria) { msg.innerText = 'Preencha todos os campos.'; return; }
+
+                const btn = document.getElementById('btn-confirmar-colab');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Salvando...';
+
+                try {
+                    const res = await fetch(`/api/funcionario/${encodeURIComponent(this.modoEdicao)}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, funcionario: { nome, funcao, diaria } })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    const idx = this.lista.findIndex(x => x.cpf === this.modoEdicao);
+                    if (idx !== -1) { this.lista[idx].nome = nome.toUpperCase(); this.lista[idx].funcao = funcao.toUpperCase(); this.lista[idx].diaria = parseFloat(diaria); }
+                    showToast('Colaborador atualizado com sucesso!');
+                    this.fecharModal();
+                    this.render();
+                } catch(e) {
+                    msg.innerText = e.message;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Salvar Alterações';
+                }
+            },
+
+            async excluir(cpf) {
+                const c = this.lista.find(x => x.cpf === cpf);
+                if (!confirm(`Excluir o colaborador "${c?.nome || cpf}"? Esta ação não pode ser desfeita.`)) return;
+
+                try {
+                    const res = await fetch(`/api/funcionario/${encodeURIComponent(cpf)}`, {
+                        method: 'DELETE',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache })
+                    });
+                    const json = await res.json();
+                    if (json.error) throw new Error(json.error);
+                    this.lista = this.lista.filter(x => x.cpf !== cpf);
+                    showToast('Colaborador excluído.');
+                    this.render();
+                } catch(e) {
+                    showToast(e.message, 'error');
+                }
+            }
+        };
+
         // --- MÓDULO DE OBRAS ---
         const obras = {
             lista: [],
