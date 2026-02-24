@@ -115,26 +115,6 @@ export default {
       }
     }
 
-    // --- ROTA: SALVAR (mantida) ---
-    if (request.method === "POST" && path === "/api/save") {
-      try {
-        const { username, password, appData } = await request.json();
-
-        const user = await authenticate(username, password);
-        if (!user) {
-          return new Response(JSON.stringify({ error: "Não autorizado." }), { status: 401 });
-        }
-
-        user.data = appData;
-
-        await env.DB.put(`user:${username}`, JSON.stringify(user));
-
-        return new Response(JSON.stringify({ success: true }));
-      } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao salvar." }), { status: 500 });
-      }
-    }
-
     // =====================================================================
     // 👷 FUNCIONÁRIOS
     // =====================================================================

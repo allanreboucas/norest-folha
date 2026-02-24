@@ -107,11 +107,6 @@
                     <h2 id="page-title" class="text-lg font-bold text-slate-800">LANÇAMENTO DE FREQUÊNCIA</h2>
                     <p class="text-[10px] text-gray-400 font-mono uppercase tracking-widest" id="header-subtitle">Obra: ON021.RANIERI | 2026-W08</p>
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="app.syncCloud()" id="btn-sync" class="bg-norest-blue text-white px-5 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95">
-                        <i class="fas fa-cloud-upload-alt mr-2"></i> SALVAR NUVEM
-                    </button>
-                </div>
             </header>
 
             <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50">
@@ -349,27 +344,6 @@
                 this.renderGrid();
             },
 
-            async syncCloud() {
-                const btn = document.getElementById('btn-sync');
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...';
-                btn.disabled = true;
-
-                try {
-                    const res = await fetch('/api/save', {
-                        method: 'POST',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, appData: this.data })
-                    });
-                    if (res.ok) {
-                        showToast("Dados sincronizados com a nuvem!");
-                        btn.innerHTML = '<i class="fas fa-check mr-2"></i> SALVO!';
-                        setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 2000);
-                    } else { throw new Error(); }
-                } catch(e) { 
-                    showToast("Erro ao sincronizar. Verifique a conexão.", "error"); 
-                    btn.innerHTML = originalHtml; btn.disabled = false;
-                }
-            }
         };
         // --- MÓDULO DE OBRAS ---
         const obras = {
