@@ -441,8 +441,9 @@
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
                     showToast('Obra cadastrada com sucesso!');
+                    this.lista.unshift({ id: id.toUpperCase(), nome, engenheiro, criado_em: Date.now() });
                     this.fecharModal();
-                    this.load();
+                    this.render();
                 } catch(e) {
                     msg.innerText = e.message;
                 } finally {
