@@ -190,12 +190,21 @@ export default {
         const user = await authenticate(username, password);
         if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
 
-        if (!obra?.id || !obra?.nome) {
-          return new Response(JSON.stringify({ error: "Dados inválidos" }), { status: 400 });
+        if (!obra?.id || !obra?.nome || !obra?.engenheiro) {
+          return new Response(JSON.stringify({ error: "Código, nome e engenheiro são obrigatórios." }), { status: 400 });
         }
 
-        await env.DB.put(`obra:${obra.id}`, JSON.stringify({
+        const id = obra.id.trim().toUpperCase();
+        const key = `obra:${id}`;
+
+        const existing = await env.DB.get(key);
+        if (existing) {
+          return new Response(JSON.stringify({ error: "Obra já existe." }), { status: 400 });
+        }
+
+        await env.DB.put(key, JSON.stringify({
           ...obra,
+          id,
           criado_em: Date.now()
         }));
 
