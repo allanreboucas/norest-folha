@@ -322,7 +322,7 @@
                     diasLabel.forEach(d => {
                         const v = reg.freq[d];
                         const cls = v === 1.0 ? 'p-full' : (v === 0.5 ? 'p-half' : (v === 0.0 ? 'p-none' : 'p-null'));
-                        cells += `<td onclick="app.toggle(${colab.id}, '${d}')" class="cell-active ${cls} text-[10px] font-black border-r">${v === null ? '-' : v.toFixed(1)}</td>`;
+                        cells += `<td onclick="app.toggle(${colab.id}, '${d}')" class="cell-active ${cls} text-[10px] font-black border-r">${v == null ? '-' : v.toFixed(1)}</td>`;
                     });
 
                     cells += `<td class="p-4 bg-slate-50 font-bold text-slate-600">${somaDias.toFixed(1)}</td>
