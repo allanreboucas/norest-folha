@@ -540,6 +540,35 @@
                 }
             },
 
+            async recarregarFolha() {
+                const [obrasData, colabData] = await Promise.all([
+                    fetch('/api/obras').then(r => r.json()).catch(() => []),
+                    fetch('/api/funcionarios').then(r => r.json()).catch(() => [])
+                ]);
+                this.obrasList = Array.isArray(obrasData) ? obrasData : [];
+                this.colaboradores = Array.isArray(colabData) ? colabData : [];
+
+                const sel = document.getElementById('select-obra');
+                const obraAnterior = this.config.obraAtiva;
+                if (this.obrasList.length) {
+                    sel.innerHTML = this.obrasList
+                        .sort((a, b) => b.criado_em - a.criado_em)
+                        .map(o => `<option value="${o.id}">${o.id} — ${o.nome}</option>`)
+                        .join('');
+                    // Preserva obra selecionada se ainda existe, senão usa a primeira
+                    if (obraAnterior && this.obrasList.find(o => o.id === obraAnterior)) {
+                        sel.value = obraAnterior;
+                        this.config.obraAtiva = obraAnterior;
+                    } else {
+                        this.config.obraAtiva = sel.value;
+                    }
+                } else {
+                    sel.innerHTML = '<option value="">Nenhuma obra cadastrada</option>';
+                    this.config.obraAtiva = null;
+                }
+                await this.carregarFolha();
+            },
+
             navigate(viewId) {
                 // Sidebar desktop
                 document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
@@ -555,6 +584,7 @@
                 const titles = { 'folha': 'LANÇAMENTO DE FREQUÊNCIA', 'obras': 'GESTÃO DE CANTEIROS', 'equipe': 'GESTÃO DE EQUIPE' };
                 document.getElementById('page-title').innerText = titles[viewId];
                 document.getElementById('folha-controls-bar').style.display = viewId === 'folha' ? '' : 'none';
+                if (viewId === 'folha') this.recarregarFolha();
                 if (viewId === 'obras') obras.load();
                 if (viewId === 'equipe') equipe.load();
             }
