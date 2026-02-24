@@ -334,12 +334,9 @@
                     const json = await res.json();
                     if(json.error) throw new Error(json.error);
                     this.currentUser = u; this.passCache = p;
-                    document.getElementById('auth-screen').classList.add('hidden');
-                    document.getElementById('app-container').classList.replace('hidden', 'flex');
-                    document.getElementById('user-tag').innerText = u;
-                    document.getElementById('user-tag-mob').innerText = u;
-                    showToast(`Bem-vindo, ${u}!`);
-                    app.init();
+                    sessionStorage.setItem('nr_u', u);
+                    sessionStorage.setItem('nr_p', p);
+                    auth.abrirApp(u);
                 } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
             },
             async register() {
@@ -354,9 +351,34 @@
                     showToast("Acesso administrativo criado com sucesso!"); this.toggleMode();
                 } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
             },
-            logout: () => location.reload(),
+            abrirApp(u) {
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app-container').classList.replace('hidden', 'flex');
+                document.getElementById('user-tag').innerText = u;
+                document.getElementById('user-tag-mob').innerText = u;
+                app.init();
+            },
+            logout() { sessionStorage.removeItem('nr_u'); sessionStorage.removeItem('nr_p'); location.reload(); },
             msg: (t, c="text-red-500") => { const el = document.getElementById('auth-msg'); el.innerText = t; el.className = `text-xs font-bold mt-4 h-4 ${c}`; }
         };
+
+        // Auto-restaurar sessão ao recarregar a página
+        (async () => {
+            const u = sessionStorage.getItem('nr_u');
+            const p = sessionStorage.getItem('nr_p');
+            if (!u || !p) return;
+            try {
+                const res = await fetch('/api/login', { method: 'POST', body: JSON.stringify({ username: u, password: p }) });
+                const json = await res.json();
+                if (json.error) throw new Error();
+                auth.currentUser = u;
+                auth.passCache = p;
+                auth.abrirApp(u);
+            } catch(e) {
+                sessionStorage.removeItem('nr_u');
+                sessionStorage.removeItem('nr_p');
+            }
+        })();
 
         // --- MOTOR SMART GRID ---
         const app = {
