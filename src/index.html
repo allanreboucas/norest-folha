@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Norest Engenharia | Smart Folha</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'inter': ['"Inter"', 'sans-serif'] },
+                    colors: {
+                        norest: { blue: '#1e3a8a', light: '#f8fafc', gray: '#64748b', dark: '#0f172a' }
+                    },
+                    animation: { 'fade-in': 'fadeIn 0.3s ease-out forwards', 'toast-in': 'toastIn 0.3s ease-out forwards' },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0', transform: 'translateY(-10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        toastIn: { '0%': { transform: 'translateX(100%)', opacity: '0' }, '100%': { transform: 'translateX(0)', opacity: '1' } }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .cell-active { cursor: pointer; transition: all 0.1s ease; border: 1px solid #e2e8f0; }
+        .p-null { background-color: #f8fafc; color: #cbd5e1; }
+        .p-full { background-color: #22c55e; color: white; }
+        .p-half { background-color: #eab308; color: white; }
+        .p-none { background-color: #ef4444; color: white; }
+        
+        .sidebar-item.active { background-color: #1e3a8a; color: white; font-weight: bold; }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <div id="toast-container" class="fixed top-5 right-5 flex flex-col gap-2 z-[9999]"></div>
+
+    <div id="auth-screen" class="fixed inset-0 z-[100] bg-slate-200 flex items-center justify-center p-4">
+        <div class="glass-panel p-8 w-full max-w-md rounded-xl shadow-2xl text-center border border-gray-200 animate-fade-in">
+            <div class="mb-8 flex flex-col items-center">
+                <div class="flex gap-1 mb-2">
+                    <div class="w-3 h-10 bg-norest-blue rounded-sm"></div>
+                    <div class="w-3 h-10 bg-norest-blue rounded-sm transform origin-bottom skew-x-[-20deg]"></div>
+                    <div class="w-3 h-10 bg-norest-blue rounded-sm"></div>
+                </div>
+                <h1 class="text-2xl font-bold text-norest-blue tracking-wider uppercase">Norest <span class="text-gray-500 font-light">Engenharia</span></h1>
+                <p class="text-[9px] text-gray-500 uppercase tracking-widest mt-1">Soluções em Engenharia e Projetos</p>
+            </div>
+
+            <div id="form-login" class="space-y-4">
+                <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4 border-b pb-2">Acesso Restrito</h2>
+                <input type="text" id="login-user" class="w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue" placeholder="Usuário">
+                <input type="password" id="login-pass" class="w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue" placeholder="Senha">
+                <button onclick="auth.login()" class="w-full bg-norest-blue text-white font-bold py-3 rounded-lg hover:bg-blue-800 transition shadow-lg">ENTRAR</button>
+                <p class="text-xs text-gray-500">Novo gestor? <span class="text-norest-blue font-bold cursor-pointer hover:underline" onclick="auth.toggleMode()">Solicitar Acesso</span></p>
+            </div>
+
+            <div id="form-register" class="space-y-4 hidden">
+                <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4 border-b pb-2">Novo Cadastro</h2>
+                <input type="text" id="reg-user" class="w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue" placeholder="Definir Usuário">
+                <input type="password" id="reg-pass" class="w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue" placeholder="Definir Senha">
+                <input type="password" id="reg-token" class="w-full p-3 bg-amber-50 border border-amber-200 rounded-lg outline-none" placeholder="Código de Autorização">
+                <button onclick="auth.register()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition shadow-lg">CRIAR CONTA</button>
+                <p class="text-xs text-gray-500">Já possui acesso? <span class="text-norest-blue font-bold cursor-pointer hover:underline" onclick="auth.toggleMode()">Fazer Login</span></p>
+            </div>
+            <p id="auth-msg" class="text-xs font-bold mt-4 text-red-500 h-4"></p>
+        </div>
+    </div>
+
+    <div id="app-container" class="hidden h-screen w-full flex-col md:flex-row overflow-hidden">
+        
+        <aside class="w-full md:w-64 bg-slate-900 text-slate-400 flex flex-col border-r border-slate-800 shadow-2xl z-20">
+            <div class="p-6 border-b border-slate-800 font-bold text-white text-center tracking-widest text-sm uppercase">Norest Gestão</div>
+            <nav class="flex-1 p-4 space-y-2">
+                <div onclick="app.navigate('folha', event)" class="sidebar-item active p-3 rounded-lg cursor-pointer flex items-center gap-3 transition">
+                    <i class="fas fa-calendar-check w-5"></i> <span>Apontamento</span>
+                </div>
+                <div onclick="app.navigate('obras', event)" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
+                    <i class="fas fa-hammer w-5"></i> <span>Obras</span>
+                </div>
+                <div onclick="app.navigate('equipe', event)" class="sidebar-item p-3 rounded-lg cursor-pointer flex items-center gap-3 transition hover:bg-slate-800">
+                    <i class="fas fa-users w-5"></i> <span>Equipe</span>
+                </div>
+            </nav>
+            <div class="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-950/50">
+                <div class="flex flex-col">
+                    <span class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Gestor Ativo</span>
+                    <span id="user-tag" class="text-xs font-bold text-blue-400 truncate w-32">--</span>
+                </div>
+                <button onclick="auth.logout()" class="text-slate-500 hover:text-red-500 transition-colors"><i class="fas fa-power-off"></i></button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white border-b p-4 md:px-8 flex justify-between items-center shadow-sm">
+                <div>
+                    <h2 id="page-title" class="text-lg font-bold text-slate-800">LANÇAMENTO DE FREQUÊNCIA</h2>
+                    <p class="text-[10px] text-gray-400 font-mono uppercase tracking-widest" id="header-subtitle">Obra: ON021.RANIERI | 2026-W08</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="app.syncCloud()" id="btn-sync" class="bg-norest-blue text-white px-5 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95">
+                        <i class="fas fa-cloud-upload-alt mr-2"></i> SALVAR NUVEM
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50">
+                
+                <section id="view-folha" class="view-section active animate-fade-in">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center">
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Total da Obra</p><h3 id="stat-total" class="text-xl font-bold text-norest-blue">R$ 0,00</h3></div>
+                            <i class="fas fa-wallet text-slate-200 text-2xl"></i>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center border-l-4 border-l-emerald-500">
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Efetivo Presente</p><h3 id="stat-presentes" class="text-xl font-bold text-emerald-600">0</h3></div>
+                            <i class="fas fa-user-check text-slate-200 text-2xl"></i>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center">
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Média Diária</p><h3 id="stat-media" class="text-xl font-bold text-slate-700">R$ 0,00</h3></div>
+                            <i class="fas fa-chart-line text-slate-200 text-2xl"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-[1000px]">
+                        <table class="w-full text-sm border-collapse">
+                            <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
+                                <tr>
+                                    <th class="p-4 text-left w-72 border-r">Colaborador / Função</th>
+                                    <th class="p-2 border-r">DOM</th><th class="p-2 border-r">SEG</th>
+                                    <th class="p-2 border-r">TER</th><th class="p-2 border-r">QUA</th>
+                                    <th class="p-2 border-r">QUI</th><th class="p-2 border-r">SEX</th>
+                                    <th class="p-2 border-r">SAB</th>
+                                    <th class="p-4 bg-slate-100 border-l">DIAS</th>
+                                    <th class="p-4 bg-blue-50 text-norest-blue border-l font-black">A PAGAR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="grid-body" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="view-obras" class="view-section animate-fade-in">
+                    <div class="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center text-gray-400">
+                        <i class="fas fa-hard-hat text-5xl mb-4 text-slate-200"></i>
+                        <h3 class="text-lg font-bold text-slate-600">Gestão de Canteiros</h3>
+                        <p class="text-sm">Módulo de cadastro e transferência de obras em desenvolvimento.</p>
+                    </div>
+                </section>
+
+                <section id="view-equipe" class="view-section animate-fade-in">
+                    <div class="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center text-gray-400">
+                        <i class="fas fa-id-card text-5xl mb-4 text-slate-200"></i>
+                        <h3 class="text-lg font-bold text-slate-600">Cadastro de Equipe</h3>
+                        <p class="text-sm">Módulo de admissão e configuração de diárias em desenvolvimento.</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- SISTEMA DE NOTIFICAÇÕES (Restaurado) ---
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const colors = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-red-600' : 'bg-amber-500');
+            const icon = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
+            el.className = `p-4 rounded-lg shadow-xl flex items-center gap-3 w-80 text-white text-sm font-bold animate-toast-in ${colors}`;
+            el.innerHTML = `<i class="fas ${icon} text-lg"></i> <span>${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(-10px)'; el.style.transition = 'all 0.4s'; setTimeout(() => el.remove(), 400); }, 3500);
+        }
+
+        // --- SISTEMA DE AUTENTICAÇÃO (Robusto) ---
+        const auth = {
+            currentUser: '', passCache: '',
+            toggleMode: () => {
+                document.getElementById('form-login').classList.toggle('hidden');
+                document.getElementById('form-register').classList.toggle('hidden');
+                document.getElementById('auth-msg').innerText = '';
+            },
+            async login() {
+                const u = document.getElementById('login-user').value.trim();
+                const p = document.getElementById('login-pass').value;
+                if(!u || !p) return this.msg("Preencha todos os campos.");
+                this.msg("Validando credenciais...", "text-blue-600");
+                try {
+                    const res = await fetch('/api/login', { method: 'POST', body: JSON.stringify({username: u, password: p}) });
+                    const json = await res.json();
+                    if(json.error) throw new Error(json.error);
+                    this.currentUser = u; this.passCache = p;
+                    document.getElementById('auth-screen').classList.add('hidden');
+                    document.getElementById('app-container').classList.replace('hidden', 'flex');
+                    document.getElementById('user-tag').innerText = u;
+                    showToast(`Bem-vindo, ${u}!`);
+                    app.init(json.data);
+                } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
+            },
+            async register() {
+                const u = document.getElementById('reg-user').value.trim();
+                const p = document.getElementById('reg-pass').value;
+                const t = document.getElementById('reg-token').value;
+                if(!u || !p || !t) return this.msg("Campos obrigatórios vazios.");
+                try {
+                    const res = await fetch('/api/register', { method: 'POST', body: JSON.stringify({username: u, password: p, token: t}) });
+                    const json = await res.json();
+                    if(json.error) throw new Error(json.error);
+                    showToast("Acesso administrativo criado com sucesso!"); this.toggleMode();
+                } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
+            },
+            logout: () => location.reload(),
+            msg: (t, c="text-red-500") => { const el = document.getElementById('auth-msg'); el.innerText = t; el.className = `text-xs font-bold mt-4 h-4 ${c}`; }
+        };
+
+        // --- MOTOR SMART GRID (Integrado) ---
+        const app = {
+            data: null,
+            config: { obraAtiva: 'ON021.RANIERI', semanaAtiva: '2026-W08' },
+
+            init: function(cloudData) {
+                this.data = cloudData || { colaboradores: [], obras: [], fechamentos: {} };
+                if (this.data.colaboradores.length === 0) {
+                    this.data.colaboradores = [
+                        { id: 1, nome: "NETIM", funcao: "PEDREIRO", diaria: 160 },
+                        { id: 2, nome: "VITORIO", funcao: "SERVENTE", diaria: 90 },
+                        { id: 3, nome: "LUIS", funcao: "PEDREIRO", diaria: 160 }
+                    ];
+                }
+                if (!this.data.fechamentos[this.config.semanaAtiva]) {
+                    this.data.fechamentos[this.config.semanaAtiva] = { registros: [] };
+                }
+                this.renderGrid();
+            },
+
+            navigate: function(viewId, event) {
+                document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+                event.currentTarget.classList.add('active');
+                document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+                document.getElementById('view-' + viewId).classList.add('active');
+                const titles = { 'folha': 'LANÇAMENTO DE FREQUÊNCIA', 'obras': 'GESTÃO DE CANTEIROS', 'equipe': 'GESTÃO DE EQUIPE' };
+                document.getElementById('page-title').innerText = titles[viewId];
+            },
+
+            renderGrid: function() {
+                const tbody = document.getElementById('grid-body');
+                tbody.innerHTML = '';
+                const semana = this.data.fechamentos[this.config.semanaAtiva];
+                const diasLabel = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+                
+                let totalObra = 0; let totalPresentesHoje = 0;
+
+                this.data.colaboradores.forEach(colab => {
+                    let reg = semana.registros.find(r => r.colabId === colab.id && r.obraId === this.config.obraAtiva);
+                    if (!reg) { reg = { colabId: colab.id, obraId: this.config.obraAtiva, diaria: colab.diaria, freq: {} }; semana.registros.push(reg); }
+
+                    const somaDias = Object.values(reg.freq).reduce((a, b) => a + (b || 0), 0);
+                    const aPagar = somaDias * reg.diaria;
+                    totalObra += aPagar;
+                    
+                    // Lógica para estatística "Presentes Hoje" (exemplo: considera se há algum registro no dia atual)
+                    if(Object.values(reg.freq).some(v => v > 0)) totalPresentesHoje++;
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 transition group";
+                    let cells = `<td class="p-4 text-left border-r group-hover:bg-white transition-colors">
+                                    <div class="font-bold text-slate-700">${colab.nome}</div>
+                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${colab.funcao}</div>
+                                 </td>`;
+                    
+                    diasLabel.forEach(d => {
+                        const v = reg.freq[d];
+                        const cls = v === 1.0 ? 'p-full' : (v === 0.5 ? 'p-half' : (v === 0.0 ? 'p-none' : 'p-null'));
+                        cells += `<td onclick="app.toggle(${colab.id}, '${d}')" class="cell-active ${cls} text-[10px] font-black border-r">${v === null ? '-' : v.toFixed(1)}</td>`;
+                    });
+
+                    cells += `<td class="p-4 bg-slate-50 font-bold text-slate-600">${somaDias.toFixed(1)}</td>
+                              <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>`;
+                    tr.innerHTML = cells;
+                    tbody.appendChild(tr);
+                });
+
+                // Atualiza KPIs
+                document.getElementById('stat-total').innerText = totalObra.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                document.getElementById('stat-presentes').innerText = totalPresentesHoje;
+                document.getElementById('stat-media').innerText = (totalObra / 7).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            },
+
+            toggle: function(id, dia) {
+                const reg = this.data.fechamentos[this.config.semanaAtiva].registros.find(r => r.colabId == id && r.obraId === this.config.obraAtiva);
+                const seq = [null, 1.0, 0.5, 0.0];
+                reg.freq[dia] = seq[(seq.indexOf(reg.freq[dia]) + 1) % seq.length];
+                this.renderGrid();
+            },
+
+            async syncCloud() {
+                const btn = document.getElementById('btn-sync');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> SALVANDO...';
+                btn.disabled = true;
+
+                try {
+                    const res = await fetch('/api/save', {
+                        method: 'POST',
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, appData: this.data })
+                    });
+                    if (res.ok) {
+                        showToast("Dados sincronizados com a nuvem!");
+                        btn.innerHTML = '<i class="fas fa-check mr-2"></i> SALVO!';
+                        setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 2000);
+                    } else { throw new Error(); }
+                } catch(e) { 
+                    showToast("Erro ao sincronizar. Verifique a conexão.", "error"); 
+                    btn.innerHTML = originalHtml; btn.disabled = false;
+                }
+            }
+        };
+    </script>
+</body>
+</html>
