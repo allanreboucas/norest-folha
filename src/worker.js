@@ -278,7 +278,16 @@ export default {
         }
 
         const current = JSON.parse(existing);
-        const updated = { ...current, nome: obra.nome.trim(), engenheiro: obra.engenheiro.trim() };
+        const updated = {
+          ...current,
+          nome: obra.nome.trim(),
+          engenheiro: obra.engenheiro.trim(),
+          orcamento:    obra.orcamento    !== undefined ? obra.orcamento    : (current.orcamento    ?? null),
+          data_inicio:  obra.data_inicio  !== undefined ? obra.data_inicio  : (current.data_inicio  ?? null),
+          data_termino: obra.data_termino !== undefined ? obra.data_termino : (current.data_termino ?? null),
+          progresso:    obra.progresso    !== undefined ? obra.progresso    : (current.progresso    ?? 0),
+          status:       obra.status       || current.status || 'em_andamento',
+        };
         if (obra.periodos) updated.periodos = obra.periodos;
         await env.DB.put(key, JSON.stringify(updated));
 
@@ -345,6 +354,99 @@ export default {
       if (!matchingKeys.length) return new Response(JSON.stringify([]));
       const items = await Promise.all(matchingKeys.map(k => env.DB.get(k.name)));
       return new Response(JSON.stringify(items.filter(Boolean).map(JSON.parse)));
+    }
+
+    // =====================================================================
+    // 📊 CUSTO ACUMULADO POR OBRA (para Dashboard)
+    // =====================================================================
+
+    if (request.method === "GET" && path === "/api/custo-obras") {
+      const dias = ['dom','seg','ter','qua','qui','sex','sab'];
+      const [folhaList, adicionaisList] = await Promise.all([
+        env.DB.list({ prefix: "folha:" }),
+        env.DB.list({ prefix: "adicionais:" })
+      ]);
+      const [folhaItems, adicionaisItems] = await Promise.all([
+        Promise.all(folhaList.keys.map(k => env.DB.get(k.name))),
+        Promise.all(adicionaisList.keys.map(k => env.DB.get(k.name)))
+      ]);
+      const custoPorObra = {};
+      folhaItems.filter(Boolean).map(JSON.parse).forEach(folha => {
+        if (!folha.obra || !Array.isArray(folha.registros)) return;
+        let total = 0;
+        folha.registros.forEach(reg => {
+          let somaDias = 0;
+          dias.forEach(d => {
+            const v = reg.freq?.[d];
+            if (v === 'full') somaDias += 1;
+            else if (v === 'half') somaDias += 0.5;
+          });
+          total += somaDias * (reg.diaria_historica || 0) + (reg.horas_extras || 0) * (reg.valor_hora_extra || 0);
+        });
+        custoPorObra[folha.obra] = (custoPorObra[folha.obra] || 0) + total;
+      });
+      adicionaisItems.filter(Boolean).map(JSON.parse).forEach(ad => {
+        if (!ad.obra || !Array.isArray(ad.itens)) return;
+        const totalAd = ad.itens.reduce((s, i) => s + (parseFloat(i.valor) || 0), 0);
+        custoPorObra[ad.obra] = (custoPorObra[ad.obra] || 0) + totalAd;
+      });
+      return new Response(JSON.stringify(custoPorObra), { headers: { "Content-Type": "application/json" } });
+    }
+
+    // =====================================================================
+    // 💰 ADICIONAIS FINANCEIROS POR OBRA
+    // =====================================================================
+
+    if (request.method === "GET" && path === "/api/adicionais") {
+      const obra = url.searchParams.get("obra");
+      const semana = url.searchParams.get("semana");
+      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      const data = await env.DB.get(`adicionais:${obra}:${semana}`);
+      if (!data) return new Response(JSON.stringify({ itens: [] }));
+      return new Response(data, { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (request.method === "POST" && path === "/api/adicionais") {
+      try {
+        const { username, password, obra, semana, itens } = await request.json();
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        if (!obra || !semana || !Array.isArray(itens)) {
+          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+        }
+        await env.DB.put(`adicionais:${obra}:${semana}`, JSON.stringify({ obra, semana, itens, atualizado_em: Date.now() }));
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao salvar adicionais." }), { status: 500 });
+      }
+    }
+
+    // =====================================================================
+    // 📸 FOTOS DA SEMANA
+    // =====================================================================
+
+    if (request.method === "GET" && path === "/api/fotos") {
+      const obra = url.searchParams.get("obra");
+      const semana = url.searchParams.get("semana");
+      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      const data = await env.DB.get(`fotos:${obra}:${semana}`);
+      if (!data) return new Response(JSON.stringify({ fotos: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null } }));
+      return new Response(data, { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (request.method === "POST" && path === "/api/fotos") {
+      try {
+        const { username, password, obra, semana, fotos } = await request.json();
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        if (!obra || !semana || typeof fotos !== 'object') {
+          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+        }
+        await env.DB.put(`fotos:${obra}:${semana}`, JSON.stringify({ obra, semana, fotos, atualizado_em: Date.now() }));
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao salvar fotos." }), { status: 500 });
+      }
     }
 
     return new Response("Not Found", { status: 404 });
