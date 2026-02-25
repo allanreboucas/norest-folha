@@ -278,7 +278,9 @@ export default {
         }
 
         const current = JSON.parse(existing);
-        await env.DB.put(key, JSON.stringify({ ...current, nome: obra.nome.trim(), engenheiro: obra.engenheiro.trim() }));
+        const updated = { ...current, nome: obra.nome.trim(), engenheiro: obra.engenheiro.trim() };
+        if (obra.periodos) updated.periodos = obra.periodos;
+        await env.DB.put(key, JSON.stringify(updated));
 
         return new Response(JSON.stringify({ success: true }));
       } catch (err) {
@@ -305,6 +307,44 @@ export default {
       } catch (err) {
         return new Response(JSON.stringify({ error: "Erro ao excluir obra." }), { status: 500 });
       }
+    }
+
+    // =====================================================================
+    // 📋 FOLHA DE FREQUÊNCIA
+    // =====================================================================
+
+    if (request.method === "GET" && path === "/api/folha") {
+      const obra = url.searchParams.get("obra");
+      const semana = url.searchParams.get("semana");
+      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      const data = await env.DB.get(`folha:${obra}:${semana}`);
+      if (!data) return new Response(JSON.stringify({ registros: [] }));
+      return new Response(data, { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (request.method === "POST" && path === "/api/folha") {
+      try {
+        const { username, password, obra, semana, registros } = await request.json();
+        const user = await authenticate(username, password);
+        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        if (!obra || !semana || !Array.isArray(registros)) {
+          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+        }
+        await env.DB.put(`folha:${obra}:${semana}`, JSON.stringify({ obra, semana, registros, atualizado_em: Date.now() }));
+        return new Response(JSON.stringify({ success: true }));
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Erro ao salvar folha." }), { status: 500 });
+      }
+    }
+
+    if (request.method === "GET" && path === "/api/folhas") {
+      const semana = url.searchParams.get("semana");
+      if (!semana) return new Response(JSON.stringify({ error: "Parâmetro 'semana' obrigatório." }), { status: 400 });
+      const list = await env.DB.list({ prefix: "folha:" });
+      const matchingKeys = list.keys.filter(k => k.name.endsWith(`:${semana}`));
+      if (!matchingKeys.length) return new Response(JSON.stringify([]));
+      const items = await Promise.all(matchingKeys.map(k => env.DB.get(k.name)));
+      return new Response(JSON.stringify(items.filter(Boolean).map(JSON.parse)));
     }
 
     return new Response("Not Found", { status: 404 });

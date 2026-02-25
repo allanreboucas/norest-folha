@@ -148,17 +148,28 @@
                         </div>
                     </div>
 
+                    <div class="flex items-center gap-2 mb-3">
+                        <select id="select-add-colab" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 min-w-0 flex-1">
+                            <option value="">— Selecionar colaborador para adicionar —</option>
+                        </select>
+                        <button onclick="app.adicionarColaborador()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-emerald-700 transition active:scale-95 whitespace-nowrap shrink-0">
+                            <i class="fas fa-user-plus mr-1"></i><span class="hidden md:inline">Adicionar</span>
+                        </button>
+                    </div>
+
                     <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
-                        <div class="bg-white overflow-hidden min-w-[660px]">
+                        <div class="bg-white overflow-hidden min-w-[1020px]">
                             <table class="w-full text-sm border-collapse">
                                 <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
                                     <tr>
                                         <th class="p-3 text-left w-52 border-r">Colaborador / Função</th>
+                                        <th class="p-2 border-r text-slate-400">DIÁRIA</th>
                                         <th class="p-2 border-r">DOM</th><th class="p-2 border-r">SEG</th>
                                         <th class="p-2 border-r">TER</th><th class="p-2 border-r">QUA</th>
                                         <th class="p-2 border-r">QUI</th><th class="p-2 border-r">SEX</th>
                                         <th class="p-2 border-r">SAB</th>
                                         <th class="p-3 bg-slate-100 border-l">DIAS</th>
+                                        <th class="p-2 bg-amber-50 text-amber-600 border-l whitespace-nowrap">H.EX. <span class="font-normal text-amber-400">h / R$</span></th>
                                         <th class="p-3 bg-blue-50 text-norest-blue border-l font-black">A PAGAR</th>
                                     </tr>
                                 </thead>
@@ -274,6 +285,23 @@
         </div>
     </div>
 
+    <!-- Modal: Confirmação -->
+    <div id="modal-confirmar" class="fixed inset-0 z-[400] bg-black/60 flex items-center justify-center p-4 hidden" onclick="if(event.target===this) confirmar.cancelar()">
+        <div class="glass-panel w-full max-w-sm rounded-xl shadow-2xl border border-gray-200 animate-fade-in">
+            <div class="p-6 text-center">
+                <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i id="modal-confirmar-icon" class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
+                </div>
+                <h3 id="modal-confirmar-titulo" class="font-bold text-slate-800 text-base mb-2 uppercase tracking-wide">Confirmar</h3>
+                <p id="modal-confirmar-msg" class="text-sm text-slate-500 leading-relaxed"></p>
+            </div>
+            <div class="px-6 pb-6 flex gap-3">
+                <button onclick="confirmar.cancelar()" class="flex-1 px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-bold transition border border-slate-200 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button id="btn-confirmar-acao" onclick="confirmar.ok()" class="flex-1 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow transition active:scale-95">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Nova Obra / Editar Obra -->
     <div id="modal-obra" class="fixed inset-0 z-[200] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
         <div class="glass-panel w-full md:max-w-md rounded-t-2xl md:rounded-xl shadow-2xl border border-gray-200 animate-fade-in max-h-[90vh] overflow-y-auto">
@@ -293,6 +321,24 @@
                 <div>
                     <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Engenheiro Responsável</label>
                     <input type="text" id="obra-engenheiro" placeholder="Ex: Wyctor Maia" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm">
+                </div>
+                <div class="border-t border-gray-100 pt-4">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor dos Períodos (fração da diária)</label>
+                    <div class="grid grid-cols-3 gap-2 mt-2">
+                        <div>
+                            <label class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Manhã (M)</label>
+                            <input type="number" id="obra-per-m" value="0.50" min="0" max="1" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm text-center font-mono">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Tarde (T)</label>
+                            <input type="number" id="obra-per-t" value="0.50" min="0" max="1" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm text-center font-mono">
+                        </div>
+                        <div>
+                            <label class="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Noite (N)</label>
+                            <input type="number" id="obra-per-n" value="1.00" min="0" max="2" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-indigo-200 rounded-lg outline-none focus:border-indigo-400 text-sm text-center font-mono">
+                        </div>
+                    </div>
+                    <p class="text-[9px] text-slate-400 mt-1">M+T = 1 diária · N = 1 diária (turno noturno integral)</p>
                 </div>
                 <p id="obra-msg" class="text-xs font-bold text-red-500 h-4"></p>
             </div>
@@ -380,12 +426,22 @@
             }
         })();
 
+        // --- UTILITÁRIOS ---
+        function normFreq(v) {
+            if (v && typeof v === 'object') return { M: !!v.M, T: !!v.T, N: !!v.N };
+            if (v >= 1.0) return { M: true, T: true, N: false };
+            if (v >= 0.5) return { M: true, T: false, N: false };
+            return { M: false, T: false, N: false };
+        }
+
         // --- MOTOR SMART GRID ---
         const app = {
             config: { obraAtiva: null, semanaAtiva: null },
             colaboradores: [],
             obrasList: [],
             registros: [],
+            periodosObra: { M: 0.5, T: 0.5, N: 1.0 },
+            conflictMap: {},
 
             semanaAtual() {
                 const hoje = new Date();
@@ -450,40 +506,65 @@
                 this.carregarFolha();
             },
 
+            buildConflictMap(todasFolhas) {
+                const map = {};
+                const dias = ['dom','seg','ter','qua','qui','sex','sab'];
+                todasFolhas.forEach(f => {
+                    if (f.obra === this.config.obraAtiva) return; // exclui obra atual
+                    if (!Array.isArray(f.registros)) return;
+                    f.registros.forEach(r => {
+                        if (!r.cpf) return;
+                        if (!map[r.cpf]) map[r.cpf] = {};
+                        dias.forEach(d => {
+                            const fd = normFreq(r.freq?.[d]);
+                            if (!fd.M && !fd.T && !fd.N) return;
+                            if (!map[r.cpf][d]) map[r.cpf][d] = {};
+                            ['M','T','N'].forEach(p => { if (fd[p] && !map[r.cpf][d][p]) map[r.cpf][d][p] = f.obra; });
+                        });
+                    });
+                });
+                return map;
+            },
+
             async carregarFolha() {
                 if (!this.config.obraAtiva) {
                     this.registros = [];
+                    this.conflictMap = {};
                     this.renderGrid();
                     return;
                 }
                 try {
-                    const res = await fetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`);
-                    const data = await res.json();
-                    const salvos = data.registros || [];
+                    // Carrega periodos da obra ativa
+                    const obraAtual = this.obrasList.find(o => o.id === this.config.obraAtiva);
+                    this.periodosObra = obraAtual?.periodos || { M: 0.5, T: 0.5, N: 1.0 };
 
-                    this.registros = this.colaboradores.map(c => {
-                        const salvo = salvos.find(r => r.cpf === c.cpf);
-                        if (salvo) return salvo;
-                        return {
-                            cpf: c.cpf,
-                            nome: c.nome,
-                            funcao: c.funcao,
-                            diaria_historica: c.diaria,
-                            freq: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null }
-                        };
-                    });
+                    // Carrega folha atual e todas as folhas da semana em paralelo
+                    const [data, todasFolhas] = await Promise.all([
+                        fetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`).then(r => r.json()),
+                        fetch(`/api/folhas?semana=${this.config.semanaAtiva}`).then(r => r.json()).catch(() => [])
+                    ]);
+
+                    this.conflictMap = this.buildConflictMap(Array.isArray(todasFolhas) ? todasFolhas : []);
+
+                    const salvos = data.registros || [];
+                    this.registros = salvos.map(s => ({
+                        horas_extras: 0, valor_hora_extra: 0,
+                        ...s
+                    }));
                 } catch(e) {
                     this.registros = [];
+                    this.conflictMap = {};
                 }
                 this.renderGrid();
             },
 
             renderGrid() {
                 const tbody = document.getElementById('grid-body');
-                const diasLabel = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+                const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+                const per = this.periodosObra;
 
                 if (!this.config.obraAtiva) {
-                    tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada. Acesse <b>Obras</b> para cadastrar.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada. Acesse <b>Obras</b> para cadastrar.</td></tr>';
                     document.getElementById('stat-total').innerText = 'R$ 0,00';
                     document.getElementById('stat-presentes').innerText = '0';
                     document.getElementById('stat-media').innerText = 'R$ 0,00';
@@ -491,47 +572,140 @@
                 }
 
                 if (!this.registros.length) {
-                    tbody.innerHTML = '<tr><td colspan="10" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado. Acesse <b>Equipe</b> para cadastrar.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="12" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador nesta folha. Use o seletor acima para adicionar colaboradores à obra.</td></tr>';
                     document.getElementById('stat-total').innerText = 'R$ 0,00';
                     document.getElementById('stat-presentes').innerText = '0';
                     document.getElementById('stat-media').innerText = 'R$ 0,00';
+                    this.renderSelectAdicionarColab();
                     return;
                 }
 
                 let totalObra = 0, totalPresentes = 0;
 
                 tbody.innerHTML = this.registros.map((reg, idx) => {
-                    const somaDias = diasLabel.reduce((a, d) => a + (reg.freq[d] || 0), 0);
-                    const aPagar = somaDias * reg.diaria_historica;
+                    const conflCpf = this.conflictMap[reg.cpf] || {};
+                    let somaDias = 0;
+                    dias.forEach(d => {
+                        const fd = normFreq(reg.freq?.[d]);
+                        if (fd.M) somaDias += per.M;
+                        if (fd.T) somaDias += per.T;
+                        if (fd.N) somaDias += per.N;
+                    });
+                    const horasExtras = reg.horas_extras || 0;
+                    const valorHoraExtra = reg.valor_hora_extra || 0;
+                    const aPagar = somaDias * reg.diaria_historica
+                                 + horasExtras * valorHoraExtra;
                     totalObra += aPagar;
                     if (somaDias > 0) totalPresentes++;
 
-                    const cells = diasLabel.map(d => {
-                        const v = reg.freq[d];
-                        const cls = v === 1.0 ? 'p-full' : (v === 0.5 ? 'p-half' : (v === 0.0 ? 'p-none' : 'p-null'));
-                        return `<td onclick="app.toggle(${idx},'${d}')" class="cell-active ${cls} text-center text-[10px] font-black border-r">${v == null ? '-' : v.toFixed(1)}</td>`;
+                    const cells = dias.map(d => {
+                        const fd = normFreq(reg.freq?.[d]);
+                        const dayConflict = conflCpf[d] || {};
+                        const btns = ['M', 'T', 'N'].map(p => {
+                            const active = fd[p];
+                            const conflictObra = dayConflict[p];
+                            let btnCls, onclk;
+                            if (conflictObra) {
+                                btnCls = 'bg-red-100 text-red-400 border border-red-200 cursor-not-allowed';
+                                onclk = `showToast('Conflito: já na obra ${conflictObra}','error')`;
+                            } else if (active) {
+                                btnCls = p === 'N' ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white';
+                                onclk = `app.togglePeriodo(${idx},'${d}','${p}')`;
+                            } else {
+                                btnCls = 'bg-slate-100 text-slate-300 hover:bg-slate-200 hover:text-slate-500';
+                                onclk = `app.togglePeriodo(${idx},'${d}','${p}')`;
+                            }
+                            return `<button onclick="${onclk}" class="w-6 h-6 rounded text-[8px] font-black transition-all ${btnCls}">${p}</button>`;
+                        }).join('');
+                        return `<td class="px-1 py-2 text-center border-r"><div class="flex flex-col gap-0.5 items-center">${btns}</div></td>`;
                     }).join('');
 
                     return `<tr class="hover:bg-slate-50 transition group">
                         <td class="p-4 text-left border-r group-hover:bg-white transition-colors">
-                            <div class="font-bold text-slate-700">${reg.nome}</div>
-                            <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${reg.funcao}</div>
+                            <div class="flex items-center justify-between gap-1">
+                                <div>
+                                    <div class="font-bold text-slate-700">${reg.nome}</div>
+                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${reg.funcao}</div>
+                                </div>
+                                <button onclick="app.removerColaborador(${idx})" class="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 transition-all shrink-0" title="Remover da folha"><i class="fas fa-times text-[10px]"></i></button>
+                            </div>
                         </td>
+                        <td class="p-3 text-center text-[10px] text-slate-400 border-r font-mono whitespace-nowrap">R$ ${parseFloat(reg.diaria_historica).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         ${cells}
-                        <td class="p-4 bg-slate-50 text-center font-bold text-slate-600">${somaDias.toFixed(1)}</td>
-                        <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td class="p-4 bg-slate-50 text-center font-bold text-slate-600">${somaDias.toFixed(2)}</td>
+                        <td class="p-2 bg-amber-50 border-l border-amber-100 text-center">
+                            <div class="flex flex-col gap-0.5 items-center">
+                                <input type="number" min="0" step="0.5" value="${horasExtras}" placeholder="h"
+                                    onchange="app.setField(${idx},'horas_extras',this.value)"
+                                    class="w-14 text-center text-[10px] font-bold text-amber-700 bg-transparent outline-none border border-amber-200 rounded p-1 focus:border-amber-400">
+                                <input type="number" min="0" step="0.01" value="${valorHoraExtra}" placeholder="R$/h"
+                                    onchange="app.setField(${idx},'valor_hora_extra',this.value)"
+                                    class="w-14 text-center text-[10px] text-amber-500 bg-transparent outline-none border border-amber-100 rounded p-1 focus:border-amber-300">
+                            </div>
+                        </td>
+                        <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100 whitespace-nowrap">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                     </tr>`;
                 }).join('');
 
                 document.getElementById('stat-total').innerText = totalObra.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 document.getElementById('stat-presentes').innerText = totalPresentes;
                 document.getElementById('stat-media').innerText = (totalPresentes > 0 ? totalObra / totalPresentes : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                this.renderSelectAdicionarColab();
             },
 
-            toggle(idx, dia) {
+            togglePeriodo(idx, dia, periodo) {
                 const reg = this.registros[idx];
-                const seq = [null, 1.0, 0.5, 0.0];
-                reg.freq[dia] = seq[(seq.indexOf(reg.freq[dia]) + 1) % seq.length];
+                const fd = normFreq(reg.freq?.[dia]);
+                const conflictObra = (this.conflictMap[reg.cpf]?.[dia] || {})[periodo];
+                if (conflictObra) { showToast(`Conflito com obra ${conflictObra}`, 'error'); return; }
+                fd[periodo] = !fd[periodo];
+                reg.freq[dia] = fd;
+                this.renderGrid();
+            },
+
+            setField(idx, field, value) {
+                this.registros[idx][field] = Math.max(0, parseFloat(value) || 0);
+                this.renderGrid();
+            },
+
+            renderSelectAdicionarColab() {
+                const sel = document.getElementById('select-add-colab');
+                if (!sel) return;
+                const cpfsNaFolha = new Set(this.registros.map(r => r.cpf));
+                const disponiveis = this.colaboradores.filter(c => !cpfsNaFolha.has(c.cpf));
+                sel.innerHTML = disponiveis.length
+                    ? '<option value="">— Selecionar colaborador para adicionar —</option>' +
+                      disponiveis.sort((a, b) => a.nome.localeCompare(b.nome))
+                          .map(c => `<option value="${c.cpf}">${c.nome} — ${c.funcao}</option>`).join('')
+                    : '<option value="">Todos os colaboradores já estão na folha</option>';
+            },
+
+            adicionarColaborador() {
+                const sel = document.getElementById('select-add-colab');
+                const cpf = sel.value;
+                if (!cpf) return;
+                const colab = this.colaboradores.find(c => c.cpf === cpf);
+                if (!colab) return;
+                this.registros.push({
+                    cpf: colab.cpf,
+                    nome: colab.nome,
+                    funcao: colab.funcao,
+                    diaria_historica: colab.diaria,
+                    horas_extras: 0, valor_hora_extra: 0,
+                    freq: { dom: {M:false,T:false,N:false}, seg: {M:false,T:false,N:false}, ter: {M:false,T:false,N:false}, qua: {M:false,T:false,N:false}, qui: {M:false,T:false,N:false}, sex: {M:false,T:false,N:false}, sab: {M:false,T:false,N:false} }
+                });
+                this.renderGrid();
+            },
+
+            async removerColaborador(idx) {
+                const reg = this.registros[idx];
+                const ok = await confirmar.abrir(
+                    'Remover da Folha',
+                    `Deseja remover "${reg.nome}" da folha desta semana? Os dados não salvos serão perdidos.`,
+                    { botao: 'Remover', cor: 'bg-amber-500 hover:bg-amber-600', icone: 'fa-user-minus text-amber-500' }
+                );
+                if (!ok) return;
+                this.registros.splice(idx, 1);
                 this.renderGrid();
             },
 
@@ -611,6 +785,31 @@
                 if (viewId === 'equipe') equipe.load();
             }
         };
+        // --- MODAL DE CONFIRMAÇÃO ---
+        const confirmar = {
+            _resolve: null,
+            abrir(titulo, msg, { botao = 'Excluir', cor = 'bg-red-600 hover:bg-red-700', icone = 'fa-exclamation-triangle text-red-500' } = {}) {
+                document.getElementById('modal-confirmar-titulo').innerText = titulo;
+                document.getElementById('modal-confirmar-msg').innerText = msg;
+                document.getElementById('modal-confirmar-icon').className = `fas ${icone} text-2xl`;
+                const btn = document.getElementById('btn-confirmar-acao');
+                btn.innerText = botao;
+                btn.className = `flex-1 ${cor} text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow transition active:scale-95`;
+                document.getElementById('modal-confirmar').classList.remove('hidden');
+                return new Promise(resolve => { this._resolve = resolve; });
+            },
+            ok() {
+                document.getElementById('modal-confirmar').classList.add('hidden');
+                if (this._resolve) { this._resolve(true); this._resolve = null; }
+            },
+            cancelar() {
+                document.getElementById('modal-confirmar').classList.add('hidden');
+                if (this._resolve) { this._resolve(false); this._resolve = null; }
+            }
+        };
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') confirmar.cancelar(); });
+
         // --- MÓDULO DE EQUIPE ---
         const equipe = {
             lista: [],
@@ -761,7 +960,12 @@
 
             async excluir(cpf) {
                 const c = this.lista.find(x => x.cpf === cpf);
-                if (!confirm(`Excluir o colaborador "${c?.nome || cpf}"? Esta ação não pode ser desfeita.`)) return;
+                const ok = await confirmar.abrir(
+                    'Excluir Colaborador',
+                    `Deseja excluir permanentemente "${c?.nome || cpf}" do cadastro? Esta ação não pode ser desfeita.`,
+                    { botao: 'Excluir', cor: 'bg-red-600 hover:bg-red-700', icone: 'fa-user-times text-red-500' }
+                );
+                if (!ok) return;
 
                 try {
                     const res = await fetch(`/api/funcionario/${encodeURIComponent(cpf)}`, {
@@ -827,6 +1031,9 @@
                 document.getElementById('obra-id').value = '';
                 document.getElementById('obra-nome').value = '';
                 document.getElementById('obra-engenheiro').value = '';
+                document.getElementById('obra-per-m').value = '0.50';
+                document.getElementById('obra-per-t').value = '0.50';
+                document.getElementById('obra-per-n').value = '1.00';
                 document.getElementById('obra-msg').innerText = '';
                 const btn = document.getElementById('btn-confirmar-obra');
                 btn.innerText = 'Criar Obra';
@@ -843,6 +1050,9 @@
                 document.getElementById('campo-obra-id').style.display = 'none';
                 document.getElementById('obra-nome').value = o.nome;
                 document.getElementById('obra-engenheiro').value = o.engenheiro;
+                document.getElementById('obra-per-m').value = o.periodos?.M ?? 0.50;
+                document.getElementById('obra-per-t').value = o.periodos?.T ?? 0.50;
+                document.getElementById('obra-per-n').value = o.periodos?.N ?? 1.00;
                 document.getElementById('obra-msg').innerText = '';
                 const btn = document.getElementById('btn-confirmar-obra');
                 btn.innerText = 'Salvar Alterações';
@@ -861,6 +1071,11 @@
                 const nome = document.getElementById('obra-nome').value.trim();
                 const engenheiro = document.getElementById('obra-engenheiro').value.trim();
                 const msg = document.getElementById('obra-msg');
+                const periodos = {
+                    M: parseFloat(document.getElementById('obra-per-m').value) || 0.5,
+                    T: parseFloat(document.getElementById('obra-per-t').value) || 0.5,
+                    N: parseFloat(document.getElementById('obra-per-n').value) || 1.0
+                };
 
                 if (!id || !nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
 
@@ -871,12 +1086,12 @@
                 try {
                     const res = await fetch('/api/obra', {
                         method: 'POST',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { id, nome, engenheiro } })
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { id, nome, engenheiro, periodos } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
                     showToast('Obra cadastrada com sucesso!');
-                    this.lista.unshift({ id: id.toUpperCase(), nome, engenheiro, criado_em: Date.now() });
+                    this.lista.unshift({ id: id.toUpperCase(), nome, engenheiro, periodos, criado_em: Date.now() });
                     this.fecharModal();
                     this.render();
                 } catch(e) {
@@ -891,6 +1106,11 @@
                 const nome = document.getElementById('obra-nome').value.trim();
                 const engenheiro = document.getElementById('obra-engenheiro').value.trim();
                 const msg = document.getElementById('obra-msg');
+                const periodos = {
+                    M: parseFloat(document.getElementById('obra-per-m').value) || 0.5,
+                    T: parseFloat(document.getElementById('obra-per-t').value) || 0.5,
+                    N: parseFloat(document.getElementById('obra-per-n').value) || 1.0
+                };
 
                 if (!nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
 
@@ -901,12 +1121,12 @@
                 try {
                     const res = await fetch(`/api/obra/${encodeURIComponent(this.modoEdicao)}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro } })
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro, periodos } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
                     const idx = this.lista.findIndex(x => x.id === this.modoEdicao);
-                    if (idx !== -1) { this.lista[idx].nome = nome; this.lista[idx].engenheiro = engenheiro; }
+                    if (idx !== -1) { this.lista[idx].nome = nome; this.lista[idx].engenheiro = engenheiro; this.lista[idx].periodos = periodos; }
                     showToast('Obra atualizada com sucesso!');
                     this.fecharModal();
                     this.render();
@@ -919,7 +1139,13 @@
             },
 
             async excluir(id) {
-                if (!confirm(`Excluir a obra "${id}"? Esta ação não pode ser desfeita.`)) return;
+                const o = this.lista.find(x => x.id === id);
+                const ok = await confirmar.abrir(
+                    'Excluir Obra',
+                    `Deseja excluir permanentemente a obra "${o?.nome || id}" (${id})? Todos os dados desta obra serão perdidos.`,
+                    { botao: 'Excluir Obra', cor: 'bg-red-600 hover:bg-red-700', icone: 'fa-hard-hat text-red-500' }
+                );
+                if (!ok) return;
 
                 try {
                     const res = await fetch(`/api/obra/${encodeURIComponent(id)}`, {
