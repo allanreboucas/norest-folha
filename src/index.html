@@ -41,8 +41,11 @@
         .view-section { display: none; }
         .view-section.active { display: block; }
         .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-        .mob-nav-btn { flex: 1; padding: 10px 4px 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: #64748b; transition: color 0.15s; border: none; background: none; }
+        .mob-nav-btn { flex: 1; padding: 10px 4px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #64748b; transition: color 0.15s, background 0.15s; border: none; background: none; position: relative; -webkit-tap-highlight-color: transparent; }
         .mob-nav-btn.active { color: #60a5fa; }
+        .mob-nav-btn.active::before { content: ''; position: absolute; top: 0; left: 25%; right: 25%; height: 2px; background: #60a5fa; border-radius: 0 0 4px 4px; }
+        .mob-nav-btn:active { background: rgba(255,255,255,0.05); }
+        .mob-nav-btn i { font-size: 18px; }
         .mob-nav-btn span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
@@ -108,34 +111,40 @@
 
         <main class="flex-1 flex flex-col overflow-hidden">
             <header class="bg-white border-b shadow-sm">
+                <!-- Linha 1: título + usuário/logout (mobile e desktop) -->
                 <div class="px-4 md:px-8 pt-3 pb-1 flex items-center justify-between gap-2">
                     <h2 id="page-title" class="text-base md:text-lg font-bold text-slate-800 truncate">LANÇAMENTO DE FREQUÊNCIA</h2>
                     <div class="md:hidden flex items-center gap-2 shrink-0">
-                        <span id="user-tag-mob" class="text-[10px] text-blue-400 font-bold"></span>
-                        <button onclick="auth.logout()" class="text-slate-400 hover:text-red-500 transition-colors text-sm"><i class="fas fa-power-off"></i></button>
+                        <span id="user-tag-mob" class="text-[10px] text-blue-400 font-bold truncate max-w-[80px]"></span>
+                        <button onclick="auth.logout()" class="text-slate-400 hover:text-red-500 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50"><i class="fas fa-power-off text-sm"></i></button>
                     </div>
                 </div>
-                <div id="folha-controls-bar" class="px-4 md:px-8 pb-3 flex items-center gap-2">
-                    <div id="folha-controls-sub" class="flex items-center gap-1 shrink-0">
-                        <button onclick="app.navSemana(-1)" class="text-slate-400 hover:text-norest-blue transition w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-left text-xs"></i></button>
-                        <span id="semana-label" class="text-[10px] text-gray-400 font-mono uppercase tracking-widest whitespace-nowrap">—</span>
-                        <button onclick="app.navSemana(1)" class="text-slate-400 hover:text-norest-blue transition w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-right text-xs"></i></button>
-                    </div>
-                    <div id="folha-controls-right" class="flex items-center gap-2 flex-1 justify-end min-w-0">
-                        <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold min-w-0 flex-1 max-w-[200px]">
+
+                <!-- Linha 2 mobile: select de obra em linha própria -->
+                <div id="folha-controls-bar" class="px-4 md:px-8 pb-3 flex flex-col md:flex-row md:items-center gap-2">
+                    <!-- Linha obra (mobile: full width) -->
+                    <div class="flex items-center gap-2 w-full md:flex-1 md:justify-end md:min-w-0">
+                        <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-2 py-2 md:py-1.5 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold flex-1 md:max-w-[200px]">
                             <option value="">Carregando...</option>
                         </select>
-                        <button onclick="app.exportarPDF()" title="Exportar PDF" class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-rose-700 transition-all active:scale-95 whitespace-nowrap shrink-0">
+                        <button onclick="app.exportarPDF()" title="Exportar PDF" class="bg-rose-600 text-white px-3 py-2 md:py-1.5 rounded-lg text-xs font-bold shadow hover:bg-rose-700 transition-all active:scale-95 whitespace-nowrap shrink-0">
                             <i class="fas fa-file-pdf"></i><span class="hidden md:inline ml-1">PDF</span>
                         </button>
-                        <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap shrink-0">
+                        <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-3 py-2 md:py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap shrink-0">
                             <i class="fas fa-save"></i><span class="hidden md:inline ml-1">SALVAR</span>
                         </button>
+                    </div>
+
+                    <!-- Linha semana (mobile: abaixo da obra) -->
+                    <div id="folha-controls-sub" class="flex items-center gap-1 md:order-first md:shrink-0">
+                        <button onclick="app.navSemana(-1)" class="text-slate-400 hover:text-norest-blue transition w-8 h-8 md:w-7 md:h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-left text-xs"></i></button>
+                        <span id="semana-label" class="text-[10px] text-gray-400 font-mono uppercase tracking-widest whitespace-nowrap">­</span>
+                        <button onclick="app.navSemana(1)" class="text-slate-400 hover:text-norest-blue transition w-8 h-8 md:w-7 md:h-7 flex items-center justify-center rounded hover:bg-slate-100"><i class="fas fa-chevron-right text-xs"></i></button>
                     </div>
                 </div>
             </header>
 
-            <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50 pb-20 md:pb-8">
+            <div class="flex-1 overflow-auto p-4 md:p-8 bg-slate-50 pb-24 md:pb-8">
                 
                 <section id="view-folha" class="view-section active animate-fade-in">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -195,10 +204,12 @@
                     <div class="flex justify-between items-center mb-4">
                         <p class="text-xs text-slate-400 uppercase font-bold tracking-widest">Obras Cadastradas</p>
                         <button onclick="obras.abrirModal()" class="bg-norest-blue text-white px-4 py-2 rounded-lg text-xs font-bold shadow hover:bg-blue-800 transition active:scale-95">
-                            <i class="fas fa-plus mr-2"></i> Nova Obra
+                            <i class="fas fa-plus mr-2"></i><span class="hidden sm:inline"> Nova</span> Obra
                         </button>
                     </div>
-                    <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+
+                    <!-- Tabela (desktop) -->
+                    <div class="hidden md:block overflow-x-auto rounded-xl shadow-sm border border-gray-200">
                         <div class="bg-white overflow-hidden min-w-[480px]">
                             <table class="w-full text-sm border-collapse">
                                 <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
@@ -216,16 +227,23 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- Cards (mobile) -->
+                    <div id="obras-cards" class="md:hidden space-y-3">
+                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center text-slate-400 text-xs">Carregando...</div>
+                    </div>
                 </section>
 
                 <section id="view-equipe" class="view-section animate-fade-in">
                     <div class="flex justify-between items-center mb-4">
                         <p class="text-xs text-slate-400 uppercase font-bold tracking-widest">Colaboradores Cadastrados</p>
                         <button onclick="equipe.abrirModal()" class="bg-norest-blue text-white px-4 py-2 rounded-lg text-xs font-bold shadow hover:bg-blue-800 transition active:scale-95">
-                            <i class="fas fa-plus mr-2"></i> Novo Colaborador
+                            <i class="fas fa-plus mr-2"></i><span class="hidden sm:inline"> Novo</span> Colaborador
                         </button>
                     </div>
-                    <div class="overflow-x-auto rounded-xl shadow-sm border border-gray-200">
+
+                    <!-- Tabela (desktop) -->
+                    <div class="hidden md:block overflow-x-auto rounded-xl shadow-sm border border-gray-200">
                         <div class="bg-white overflow-hidden min-w-[480px]">
                             <table class="w-full text-sm border-collapse">
                                 <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
@@ -243,23 +261,28 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- Cards (mobile) -->
+                    <div id="equipe-cards" class="md:hidden space-y-3">
+                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center text-slate-400 text-xs">Carregando...</div>
+                    </div>
                 </section>
             </div>
         </main>
     </div>
 
     <!-- BOTTOM NAV (mobile only) -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-30">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex z-30" style="padding-bottom: env(safe-area-inset-bottom);">
         <button data-view="folha" onclick="app.navigate('folha')" class="mob-nav-btn active">
-            <i class="fas fa-calendar-check text-base"></i>
+            <i class="fas fa-calendar-check"></i>
             <span>Apontamento</span>
         </button>
         <button data-view="obras" onclick="app.navigate('obras')" class="mob-nav-btn">
-            <i class="fas fa-hammer text-base"></i>
+            <i class="fas fa-hammer"></i>
             <span>Obras</span>
         </button>
         <button data-view="equipe" onclick="app.navigate('equipe')" class="mob-nav-btn">
-            <i class="fas fa-users text-base"></i>
+            <i class="fas fa-users"></i>
             <span>Equipe</span>
         </button>
     </nav>
@@ -311,6 +334,27 @@
                 <button onclick="confirmar.cancelar()" class="flex-1 px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-bold transition border border-slate-200 rounded-lg hover:bg-slate-50">Cancelar</button>
                 <button id="btn-confirmar-acao" onclick="confirmar.ok()" class="flex-1 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow transition active:scale-95">Confirmar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Preview PDF -->
+    <div id="modal-pdf-preview" class="fixed inset-0 z-[500] bg-black/70 flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col animate-fade-in" style="height:90vh;">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200 shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-file-pdf text-rose-600 text-lg"></i>
+                    <h3 class="font-bold text-slate-800 text-sm uppercase tracking-widest">Preview da Folha de Pagamento</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-baixar-pdf" class="bg-rose-600 text-white px-4 py-2 rounded-lg text-xs font-bold shadow hover:bg-rose-700 transition active:scale-95 flex items-center gap-2">
+                        <i class="fas fa-download"></i> Baixar PDF
+                    </button>
+                    <button onclick="document.getElementById('modal-pdf-preview').classList.add('hidden'); document.getElementById('pdf-preview-iframe').src='';" class="text-slate-400 hover:text-slate-700 transition ml-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <iframe id="pdf-preview-iframe" class="flex-1 w-full rounded-b-xl" style="border:none;"></iframe>
         </div>
     </div>
 
@@ -829,11 +873,15 @@
                 await this.carregarFolha();
             },
 
-            exportarPDF() {
+            async exportarPDF() {
                 if (!this.config.obraAtiva || !this.registros.length) {
                     showToast('Nenhum dado para exportar.', 'warn');
                     return;
                 }
+
+                // ── Salvar automaticamente antes de gerar o PDF ──
+                await this.salvarSemana();
+
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
                 const W = 297, H = 210, ML = 14, MR = 14;
@@ -1018,7 +1066,14 @@
                 }
 
                 const nomeArquivo = `folha-${(obra?.nome || 'obra').toLowerCase().replace(/\s+/g, '-')}-${this.config.semanaAtiva}.pdf`;
-                doc.save(nomeArquivo);
+
+                // ── Preview modal ──
+                const blobUrl = doc.output('bloburl');
+                const modal = document.getElementById('modal-pdf-preview');
+                const iframe = document.getElementById('pdf-preview-iframe');
+                iframe.src = blobUrl;
+                document.getElementById('btn-baixar-pdf').onclick = () => { doc.save(nomeArquivo); };
+                modal.classList.remove('hidden');
             },
 
             navigate(viewId) {
@@ -1077,38 +1132,63 @@
 
             async load() {
                 const tbody = document.getElementById('equipe-body');
+                const cards = document.getElementById('equipe-cards');
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
+                cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Carregando...</div>';
                 try {
                     const res = await fetch('/api/funcionarios');
                     this.lista = await res.json();
                     this.render();
                 } catch(e) {
                     tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</td></tr>';
+                    cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</div>';
                 }
             },
 
             render() {
                 const tbody = document.getElementById('equipe-body');
-                if (!this.lista.length) {
+                const cards = document.getElementById('equipe-cards');
+                const sorted = [...this.lista].sort((a, b) => a.nome.localeCompare(b.nome));
+
+                if (!sorted.length) {
                     tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</td></tr>';
+                    cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Nenhum colaborador cadastrado.</div>';
                     return;
                 }
-                tbody.innerHTML = this.lista
-                    .sort((a, b) => a.nome.localeCompare(b.nome))
-                    .map(c => `
-                        <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
-                            <td class="p-4 font-mono text-slate-500 text-xs border-r">${this.formatCPF(c.cpf)}</td>
-                            <td class="p-4 font-bold text-slate-700 border-r">${c.nome}</td>
-                            <td class="p-4 text-slate-600 border-r">${c.funcao}</td>
-                            <td class="p-4 text-slate-700 font-semibold border-r">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                            <td class="p-4 text-center">
-                                <div class="flex gap-2 justify-center">
-                                    <button onclick="equipe.abrirEdicao('${c.cpf}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                    <button onclick="equipe.excluir('${c.cpf}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('');
+
+                // ── Tabela desktop ──
+                tbody.innerHTML = sorted.map(c => `
+                    <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
+                        <td class="p-4 font-mono text-slate-500 text-xs border-r">${this.formatCPF(c.cpf)}</td>
+                        <td class="p-4 font-bold text-slate-700 border-r">${c.nome}</td>
+                        <td class="p-4 text-slate-600 border-r">${c.funcao}</td>
+                        <td class="p-4 text-slate-700 font-semibold border-r">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex gap-2 justify-center">
+                                <button onclick="equipe.abrirEdicao('${c.cpf}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                <button onclick="equipe.excluir('${c.cpf}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                // ── Cards mobile ──
+                cards.innerHTML = sorted.map(c => `
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-norest-blue/10 flex items-center justify-center shrink-0">
+                            <i class="fas fa-user text-norest-blue text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-slate-800 text-sm truncate">${c.nome}</p>
+                            <p class="text-[11px] text-slate-500 truncate">${c.funcao} &bull; <span class="font-mono">${this.formatCPF(c.cpf)}</span></p>
+                            <p class="text-[11px] font-bold text-emerald-600 mt-0.5">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})} / dia</p>
+                        </div>
+                        <div class="flex flex-col gap-2 shrink-0">
+                            <button onclick="equipe.abrirEdicao('${c.cpf}')" class="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition active:scale-95" title="Editar"><i class="fas fa-pencil-alt text-xs"></i></button>
+                            <button onclick="equipe.excluir('${c.cpf}')" class="w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition active:scale-95" title="Excluir"><i class="fas fa-trash text-xs"></i></button>
+                        </div>
+                    </div>
+                `).join('');
             },
 
             abrirModal() {
@@ -1246,38 +1326,66 @@
 
             async load() {
                 const tbody = document.getElementById('obras-body');
+                const cards = document.getElementById('obras-cards');
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
+                cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Carregando...</div>';
                 try {
                     const res = await fetch('/api/obras');
                     this.lista = await res.json();
                     this.render();
                 } catch(e) {
                     tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</td></tr>';
+                    cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</div>';
                 }
             },
 
             render() {
                 const tbody = document.getElementById('obras-body');
-                if (!this.lista.length) {
+                const cards = document.getElementById('obras-cards');
+                const sorted = [...this.lista].sort((a, b) => b.criado_em - a.criado_em);
+
+                if (!sorted.length) {
                     tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</td></tr>';
+                    cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Nenhuma obra cadastrada.</div>';
                     return;
                 }
-                tbody.innerHTML = this.lista
-                    .sort((a, b) => b.criado_em - a.criado_em)
-                    .map(o => `
-                        <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
-                            <td class="p-4 font-mono font-bold text-norest-blue text-xs border-r">${o.id}</td>
-                            <td class="p-4 font-semibold text-slate-700 border-r">${o.nome}</td>
-                            <td class="p-4 text-slate-600 border-r">${o.engenheiro}</td>
-                            <td class="p-4 text-slate-400 text-xs border-r">${new Date(o.criado_em).toLocaleDateString('pt-BR')}</td>
-                            <td class="p-4 text-center">
-                                <div class="flex gap-2 justify-center">
-                                    <button onclick="obras.abrirEdicao('${o.id}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                    <button onclick="obras.excluir('${o.id}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('');
+
+                // ── Tabela desktop ──
+                tbody.innerHTML = sorted.map(o => `
+                    <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
+                        <td class="p-4 font-mono font-bold text-norest-blue text-xs border-r">${o.id}</td>
+                        <td class="p-4 font-semibold text-slate-700 border-r">${o.nome}</td>
+                        <td class="p-4 text-slate-600 border-r">${o.engenheiro}</td>
+                        <td class="p-4 text-slate-400 text-xs border-r">${new Date(o.criado_em).toLocaleDateString('pt-BR')}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex gap-2 justify-center">
+                                <button onclick="obras.abrirEdicao('${o.id}')" class="text-xs text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded hover:bg-blue-50 transition" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                <button onclick="obras.excluir('${o.id}')" class="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition" title="Excluir"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                // ── Cards mobile ──
+                cards.innerHTML = sorted.map(o => `
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-norest-blue/10 flex items-center justify-center shrink-0">
+                            <i class="fas fa-hammer text-norest-blue text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="font-mono text-[10px] font-bold text-norest-blue bg-blue-50 px-1.5 py-0.5 rounded">${o.id}</span>
+                                <span class="text-[10px] text-slate-400">${new Date(o.criado_em).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                            <p class="font-bold text-slate-800 text-sm truncate">${o.nome}</p>
+                            <p class="text-[11px] text-slate-500 truncate"><i class="fas fa-hard-hat mr-1"></i>${o.engenheiro}</p>
+                        </div>
+                        <div class="flex flex-col gap-2 shrink-0">
+                            <button onclick="obras.abrirEdicao('${o.id}')" class="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition active:scale-95" title="Editar"><i class="fas fa-pencil-alt text-xs"></i></button>
+                            <button onclick="obras.excluir('${o.id}')" class="w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition active:scale-95" title="Excluir"><i class="fas fa-trash text-xs"></i></button>
+                        </div>
+                    </div>
+                `).join('');
             },
 
             abrirModal() {
