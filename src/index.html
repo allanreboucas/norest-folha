@@ -167,7 +167,7 @@
                     </div>
 
                     <div class="hidden md:block overflow-x-auto rounded-xl shadow-sm border border-gray-200">
-                        <div class="bg-white overflow-hidden min-w-[1020px]">
+                        <div class="bg-white overflow-hidden min-w-[820px]">
                             <table class="w-full text-sm border-collapse">
                                 <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b tracking-wider">
                                     <tr>
@@ -334,24 +334,6 @@
                     <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Engenheiro Responsável</label>
                     <input type="text" id="obra-engenheiro" placeholder="Ex: Wyctor Maia" class="mt-1 w-full p-3 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm">
                 </div>
-                <div class="border-t border-gray-100 pt-4">
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor dos Períodos (fração da diária)</label>
-                    <div class="grid grid-cols-3 gap-2 mt-2">
-                        <div>
-                            <label class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Manhã (M)</label>
-                            <input type="number" id="obra-per-m" value="0.50" min="0" max="1" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm text-center font-mono">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Tarde (T)</label>
-                            <input type="number" id="obra-per-t" value="0.50" min="0" max="1" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-slate-200 rounded-lg outline-none focus:border-norest-blue text-sm text-center font-mono">
-                        </div>
-                        <div>
-                            <label class="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Noite (N)</label>
-                            <input type="number" id="obra-per-n" value="1.00" min="0" max="2" step="0.01" class="mt-1 w-full p-2 bg-gray-50 border border-indigo-200 rounded-lg outline-none focus:border-indigo-400 text-sm text-center font-mono">
-                        </div>
-                    </div>
-                    <p class="text-[9px] text-slate-400 mt-1">M+T = 1 diária · N = 1 diária (turno noturno integral)</p>
-                </div>
                 <p id="obra-msg" class="text-xs font-bold text-red-500 h-4"></p>
             </div>
             <div class="p-6 border-t border-gray-100 flex gap-3 justify-end">
@@ -439,11 +421,21 @@
         })();
 
         // --- UTILITÁRIOS ---
-        function normFreq(v) {
-            if (v && typeof v === 'object') return { M: !!v.M, T: !!v.T, N: !!v.N, F: !!v.F };
-            if (v >= 1.0) return { M: true, T: true, N: false, F: false };
-            if (v >= 0.5) return { M: true, T: false, N: false, F: false };
-            return { M: false, T: false, N: false, F: false };
+        // normDay: converte qualquer formato histórico para 'full'|'half'|'falta'|null
+        function normDay(v) {
+            if (v === 'full' || v === 'half' || v === 'falta') return v;
+            if (v && typeof v === 'object') {
+                if (v.F) return 'falta';
+                const score = (v.M ? 0.5 : 0) + (v.T ? 0.5 : 0) + (v.N ? 1 : 0);
+                if (score >= 1) return 'full';
+                if (score > 0) return 'half';
+                return null;
+            }
+            if (typeof v === 'number') {
+                if (v >= 1) return 'full';
+                if (v > 0) return 'half';
+            }
+            return null;
         }
 
         // --- MOTOR SMART GRID ---
@@ -452,7 +444,6 @@
             colaboradores: [],
             obrasList: [],
             registros: [],
-            periodosObra: { M: 0.5, T: 0.5, N: 1.0 },
             conflictMap: {},
 
             semanaAtual() {
@@ -522,16 +513,16 @@
                 const map = {};
                 const dias = ['dom','seg','ter','qua','qui','sex','sab'];
                 todasFolhas.forEach(f => {
-                    if (f.obra === this.config.obraAtiva) return; // exclui obra atual
+                    if (f.obra === this.config.obraAtiva) return;
                     if (!Array.isArray(f.registros)) return;
                     f.registros.forEach(r => {
                         if (!r.cpf) return;
                         if (!map[r.cpf]) map[r.cpf] = {};
                         dias.forEach(d => {
-                            const fd = normFreq(r.freq?.[d]);
-                            if (!fd.M && !fd.T && !fd.N) return;
-                            if (!map[r.cpf][d]) map[r.cpf][d] = {};
-                            ['M','T','N'].forEach(p => { if (fd[p] && !map[r.cpf][d][p]) map[r.cpf][d][p] = f.obra; });
+                            const v = normDay(r.freq?.[d]);
+                            if ((v === 'full' || v === 'half') && !map[r.cpf][d]) {
+                                map[r.cpf][d] = f.obra;
+                            }
                         });
                     });
                 });
@@ -546,11 +537,6 @@
                     return;
                 }
                 try {
-                    // Carrega periodos da obra ativa
-                    const obraAtual = this.obrasList.find(o => o.id === this.config.obraAtiva);
-                    this.periodosObra = obraAtual?.periodos || { M: 0.5, T: 0.5, N: 1.0 };
-
-                    // Carrega folha atual e todas as folhas da semana em paralelo
                     const [data, todasFolhas] = await Promise.all([
                         fetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`).then(r => r.json()),
                         fetch(`/api/folhas?semana=${this.config.semanaAtiva}`).then(r => r.json()).catch(() => [])
@@ -575,7 +561,6 @@
                 const cardsEl = document.getElementById('grid-cards');
                 const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
                 const dLabels = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
-                const per = this.periodosObra;
 
                 const emptyStats = () => {
                     document.getElementById('stat-total').innerText = 'R$ 0,00';
@@ -602,15 +587,21 @@
                 let totalObra = 0, totalPresentes = 0, totalFaltas = 0;
                 const rows = [], cards = [];
 
+                // Helpers visuais por estado do dia
+                const dayStyle = {
+                    full:  { tdCls: 'bg-emerald-50', btnCls: 'bg-emerald-500 text-white hover:bg-emerald-600', label: '✓' },
+                    half:  { tdCls: 'bg-amber-50',   btnCls: 'bg-amber-400 text-white hover:bg-amber-500',    label: '½' },
+                    falta: { tdCls: 'bg-red-50',     btnCls: 'bg-red-500 text-white hover:bg-red-600',        label: 'F' },
+                    null:  { tdCls: '',              btnCls: 'bg-slate-50 text-slate-200 border border-slate-100 hover:bg-slate-100 hover:text-slate-400', label: '—' },
+                };
+
                 this.registros.forEach((reg, idx) => {
-                    const conflCpf = this.conflictMap[reg.cpf] || {};
                     let somaDias = 0, faltasDia = 0;
                     dias.forEach(d => {
-                        const fd = normFreq(reg.freq?.[d]);
-                        if (fd.M) somaDias += per.M;
-                        if (fd.T) somaDias += per.T;
-                        if (fd.N) somaDias += per.N;
-                        if (fd.F) faltasDia++;
+                        const v = normDay(reg.freq?.[d]);
+                        if (v === 'full') somaDias += 1;
+                        else if (v === 'half') somaDias += 0.5;
+                        else if (v === 'falta') faltasDia++;
                     });
                     totalFaltas += faltasDia;
                     const horasExtras = reg.horas_extras || 0;
@@ -619,42 +610,16 @@
                     totalObra += aPagar;
                     if (somaDias > 0) totalPresentes++;
 
-                    // Shared button builder per day (M, T, N, F)
-                    const buildBtns = (d) => {
-                        const fd = normFreq(reg.freq?.[d]);
-                        const dayConflict = conflCpf[d] || {};
-                        const isFalta = fd.F;
-                        const periodBtns = ['M', 'T', 'N'].map(p => {
-                            const active = fd[p];
-                            const conflictObra = dayConflict[p];
-                            let btnCls, onclk;
-                            if (conflictObra) {
-                                btnCls = 'bg-red-100 text-red-400 border border-red-200 cursor-not-allowed';
-                                onclk = `showToast('Conflito: já na obra ${conflictObra}','error')`;
-                            } else if (active) {
-                                btnCls = p === 'N' ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white';
-                                onclk = `app.togglePeriodo(${idx},'${d}','${p}')`;
-                            } else if (isFalta) {
-                                btnCls = 'bg-slate-50 text-slate-200 cursor-not-allowed';
-                                onclk = '';
-                            } else {
-                                btnCls = 'bg-slate-100 text-slate-300 hover:bg-slate-200 hover:text-slate-500';
-                                onclk = `app.togglePeriodo(${idx},'${d}','${p}')`;
-                            }
-                            return `<button ${onclk ? `onclick="${onclk}"` : ''} class="w-6 h-6 rounded text-[8px] font-black transition-all ${btnCls}">${p}</button>`;
-                        }).join('');
-                        const fCls = isFalta
-                            ? 'bg-red-500 text-white'
-                            : 'bg-slate-100 text-slate-300 hover:bg-red-100 hover:text-red-400';
-                        const fBtn = `<button onclick="app.toggleFalta(${idx},'${d}')" class="w-6 h-6 rounded text-[8px] font-black transition-all ${fCls}">F</button>`;
-                        return periodBtns + fBtn;
-                    };
-
                     // ── Desktop table row ──
                     const cells = dias.map(d => {
-                        const fd = normFreq(reg.freq?.[d]);
-                        const bg = fd.F ? ' bg-red-50' : '';
-                        return `<td class="px-1 py-2 text-center border-r${bg}"><div class="flex flex-col gap-0.5 items-center">${buildBtns(d)}</div></td>`;
+                        const v = normDay(reg.freq?.[d]);
+                        const conflict = (this.conflictMap[reg.cpf] || {})[d];
+                        const s = dayStyle[v] ?? dayStyle[null];
+                        const conflictBtnCls = 'bg-orange-50 text-orange-300 border border-dashed border-orange-200';
+                        const btnCls = (!v && conflict) ? conflictBtnCls : s.btnCls;
+                        return `<td class="px-2 py-2 text-center border-r ${s.tdCls}">
+                            <button onclick="app.toggleDay(${idx},'${d}')" class="w-9 h-9 rounded-lg text-[11px] font-black transition-all ${btnCls}">${s.label}</button>
+                        </td>`;
                     }).join('');
 
                     const diasCell = faltasDia > 0
@@ -689,11 +654,14 @@
 
                     // ── Mobile card ──
                     const daysGrid = dias.map((d, i) => {
-                        const fd = normFreq(reg.freq?.[d]);
-                        const bg = fd.F ? ' bg-red-50 rounded-lg' : '';
-                        return `<div class="text-center${bg}">
+                        const v = normDay(reg.freq?.[d]);
+                        const conflict = (this.conflictMap[reg.cpf] || {})[d];
+                        const s = dayStyle[v] ?? dayStyle[null];
+                        const conflictBtnCls = 'bg-orange-50 text-orange-300 border border-dashed border-orange-200';
+                        const btnCls = (!v && conflict) ? conflictBtnCls : s.btnCls;
+                        return `<div class="text-center">
                             <div class="text-[8px] text-slate-400 mb-1 font-bold">${dLabels[i]}</div>
-                            <div class="flex flex-col gap-0.5 items-center">${buildBtns(d)}</div>
+                            <button onclick="app.toggleDay(${idx},'${d}')" class="w-full h-10 rounded-lg text-[11px] font-black transition-all ${btnCls}">${s.label}</button>
                         </div>`;
                     }).join('');
 
@@ -714,7 +682,7 @@
                             </div>
                         </div>
                         <div class="p-3">
-                            <div class="grid grid-cols-7 gap-1">${daysGrid}</div>
+                            <div class="grid grid-cols-7 gap-1.5">${daysGrid}</div>
                         </div>
                         <div class="border-t border-gray-100 px-3 py-2 flex items-center gap-2 bg-amber-50/60">
                             <span class="text-[10px] font-bold text-amber-600 uppercase shrink-0">H.EX.</span>
@@ -745,26 +713,17 @@
                 this.renderSelectAdicionarColab();
             },
 
-            togglePeriodo(idx, dia, periodo) {
+            toggleDay(idx, dia) {
                 const reg = this.registros[idx];
-                const fd = normFreq(reg.freq?.[dia]);
-                const conflictObra = (this.conflictMap[reg.cpf]?.[dia] || {})[periodo];
-                if (conflictObra) { showToast(`Conflito com obra ${conflictObra}`, 'error'); return; }
-                fd.F = false; // marcar presença remove falta
-                fd[periodo] = !fd[periodo];
-                reg.freq[dia] = fd;
-                this.renderGrid();
-            },
-
-            toggleFalta(idx, dia) {
-                const reg = this.registros[idx];
-                const fd = normFreq(reg.freq?.[dia]);
-                if (fd.F) {
-                    fd.F = false;
-                } else {
-                    fd.M = false; fd.T = false; fd.N = false; fd.F = true;
+                const current = normDay(reg.freq?.[dia]);
+                const order = [null, 'full', 'half', 'falta'];
+                const next = order[(order.indexOf(current) + 1) % order.length];
+                const conflict = (this.conflictMap[reg.cpf] || {})[dia];
+                if (conflict && (next === 'full' || next === 'half')) {
+                    showToast(`Conflito: ${reg.nome} já está na obra ${conflict}`, 'error');
+                    return;
                 }
-                reg.freq[dia] = fd;
+                reg.freq[dia] = next;
                 this.renderGrid();
             },
 
@@ -797,7 +756,7 @@
                     funcao: colab.funcao,
                     diaria_historica: colab.diaria,
                     horas_extras: 0, valor_hora_extra: 0,
-                    freq: { dom: {M:false,T:false,N:false,F:false}, seg: {M:false,T:false,N:false,F:false}, ter: {M:false,T:false,N:false,F:false}, qua: {M:false,T:false,N:false,F:false}, qui: {M:false,T:false,N:false,F:false}, sex: {M:false,T:false,N:false,F:false}, sab: {M:false,T:false,N:false,F:false} }
+                    freq: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null }
                 });
                 this.renderGrid();
             },
@@ -883,7 +842,6 @@
                 const semanaStr = this.formatarIntervalo(this.config.semanaAtiva);
                 const dias = ['dom','seg','ter','qua','qui','sex','sab'];
                 const dLabels = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
-                const per = this.periodosObra;
                 const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                 // ── Cabeçalho azul ──
@@ -912,13 +870,11 @@
                 const tableData = this.registros.map(reg => {
                     let somaDias = 0;
                     const dayVals = dias.map(d => {
-                        const fd = normFreq(reg.freq?.[d]);
-                        if (fd.F) return 'F';
-                        const parts = [];
-                        if (fd.M) { parts.push('M'); somaDias += per.M; }
-                        if (fd.T) { parts.push('T'); somaDias += per.T; }
-                        if (fd.N) { parts.push('N'); somaDias += per.N; }
-                        return parts.length ? parts.join('+') : '—';
+                        const v = normDay(reg.freq?.[d]);
+                        if (v === 'full')  { somaDias += 1;   return '\u2713'; }
+                        if (v === 'half')  { somaDias += 0.5; return '1/2'; }
+                        if (v === 'falta') return 'F';
+                        return '\u2014';
                     });
                     const hx = reg.horas_extras || 0;
                     const vhx = reg.valor_hora_extra || 0;
@@ -1010,16 +966,14 @@
                                     data.cell.styles.fillColor = [255, 228, 230];
                                     data.cell.styles.textColor = [220, 38, 38];
                                     data.cell.styles.fontStyle = 'bold';
-                                } else if (v && v !== '—') {
-                                    if (v.includes('N')) {
-                                        data.cell.styles.fillColor = [238, 242, 255];
-                                        data.cell.styles.textColor = [67, 56, 202];
-                                        data.cell.styles.fontStyle = 'bold';
-                                    } else {
-                                        data.cell.styles.fillColor = [236, 253, 245];
-                                        data.cell.styles.textColor = [5, 150, 105];
-                                        data.cell.styles.fontStyle = 'bold';
-                                    }
+                                } else if (v === '\u2713') {
+                                    data.cell.styles.fillColor = [209, 250, 229];
+                                    data.cell.styles.textColor = [5, 150, 105];
+                                    data.cell.styles.fontStyle = 'bold';
+                                } else if (v === '1/2') {
+                                    data.cell.styles.fillColor = [254, 243, 199];
+                                    data.cell.styles.textColor = [180, 83, 9];
+                                    data.cell.styles.fontStyle = 'bold';
                                 }
                             }
                             if (col === 12) {
@@ -1333,9 +1287,6 @@
                 document.getElementById('obra-id').value = '';
                 document.getElementById('obra-nome').value = '';
                 document.getElementById('obra-engenheiro').value = '';
-                document.getElementById('obra-per-m').value = '0.50';
-                document.getElementById('obra-per-t').value = '0.50';
-                document.getElementById('obra-per-n').value = '1.00';
                 document.getElementById('obra-msg').innerText = '';
                 const btn = document.getElementById('btn-confirmar-obra');
                 btn.innerText = 'Criar Obra';
@@ -1352,9 +1303,6 @@
                 document.getElementById('campo-obra-id').style.display = 'none';
                 document.getElementById('obra-nome').value = o.nome;
                 document.getElementById('obra-engenheiro').value = o.engenheiro;
-                document.getElementById('obra-per-m').value = o.periodos?.M ?? 0.50;
-                document.getElementById('obra-per-t').value = o.periodos?.T ?? 0.50;
-                document.getElementById('obra-per-n').value = o.periodos?.N ?? 1.00;
                 document.getElementById('obra-msg').innerText = '';
                 const btn = document.getElementById('btn-confirmar-obra');
                 btn.innerText = 'Salvar Alterações';
@@ -1373,12 +1321,6 @@
                 const nome = document.getElementById('obra-nome').value.trim();
                 const engenheiro = document.getElementById('obra-engenheiro').value.trim();
                 const msg = document.getElementById('obra-msg');
-                const periodos = {
-                    M: parseFloat(document.getElementById('obra-per-m').value) || 0.5,
-                    T: parseFloat(document.getElementById('obra-per-t').value) || 0.5,
-                    N: parseFloat(document.getElementById('obra-per-n').value) || 1.0
-                };
-
                 if (!id || !nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
 
                 const btn = document.getElementById('btn-confirmar-obra');
@@ -1388,12 +1330,12 @@
                 try {
                     const res = await fetch('/api/obra', {
                         method: 'POST',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { id, nome, engenheiro, periodos } })
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { id, nome, engenheiro } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
                     showToast('Obra cadastrada com sucesso!');
-                    this.lista.unshift({ id: id.toUpperCase(), nome, engenheiro, periodos, criado_em: Date.now() });
+                    this.lista.unshift({ id: id.toUpperCase(), nome, engenheiro, criado_em: Date.now() });
                     this.fecharModal();
                     this.render();
                 } catch(e) {
@@ -1408,12 +1350,6 @@
                 const nome = document.getElementById('obra-nome').value.trim();
                 const engenheiro = document.getElementById('obra-engenheiro').value.trim();
                 const msg = document.getElementById('obra-msg');
-                const periodos = {
-                    M: parseFloat(document.getElementById('obra-per-m').value) || 0.5,
-                    T: parseFloat(document.getElementById('obra-per-t').value) || 0.5,
-                    N: parseFloat(document.getElementById('obra-per-n').value) || 1.0
-                };
-
                 if (!nome || !engenheiro) { msg.innerText = 'Preencha todos os campos.'; return; }
 
                 const btn = document.getElementById('btn-confirmar-obra');
@@ -1423,12 +1359,12 @@
                 try {
                     const res = await fetch(`/api/obra/${encodeURIComponent(this.modoEdicao)}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro, periodos } })
+                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
                     const idx = this.lista.findIndex(x => x.id === this.modoEdicao);
-                    if (idx !== -1) { this.lista[idx].nome = nome; this.lista[idx].engenheiro = engenheiro; this.lista[idx].periodos = periodos; }
+                    if (idx !== -1) { this.lista[idx].nome = nome; this.lista[idx].engenheiro = engenheiro; }
                     showToast('Obra atualizada com sucesso!');
                     this.fecharModal();
                     this.render();
