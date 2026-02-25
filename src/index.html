@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -123,6 +125,9 @@
                         <select id="select-obra" onchange="app.trocarObra()" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none focus:border-norest-blue text-slate-700 font-bold min-w-0 flex-1 max-w-[200px]">
                             <option value="">Carregando...</option>
                         </select>
+                        <button onclick="app.exportarPDF()" title="Exportar PDF" class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-rose-700 transition-all active:scale-95 whitespace-nowrap shrink-0">
+                            <i class="fas fa-file-pdf"></i><span class="hidden md:inline ml-1">PDF</span>
+                        </button>
                         <button onclick="app.salvarSemana()" id="btn-salvar-semana" class="bg-norest-blue text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-blue-800 transition-all active:scale-95 whitespace-nowrap shrink-0">
                             <i class="fas fa-save"></i><span class="hidden md:inline ml-1">SALVAR</span>
                         </button>
@@ -822,6 +827,198 @@
                     this.config.obraAtiva = null;
                 }
                 await this.carregarFolha();
+            },
+
+            exportarPDF() {
+                if (!this.config.obraAtiva || !this.registros.length) {
+                    showToast('Nenhum dado para exportar.', 'warn');
+                    return;
+                }
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                const W = 297, H = 210, ML = 14, MR = 14;
+
+                const obra = this.obrasList.find(o => o.id === this.config.obraAtiva);
+                const semanaStr = this.formatarIntervalo(this.config.semanaAtiva);
+                const dias = ['dom','seg','ter','qua','qui','sex','sab'];
+                const dLabels = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+                const per = this.periodosObra;
+                const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                // ── Cabeçalho azul ──
+                doc.setFillColor(30, 58, 138);
+                doc.rect(0, 0, W, 30, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(20);
+                doc.text('SMART FOLHA', ML, 13);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(180, 205, 255);
+                doc.text('FOLHA DE PAGAMENTO SEMANAL · NOREST ENGENHARIA', ML, 19);
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.text(obra?.nome || '—', W - MR, 10, { align: 'right' });
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(200, 220, 255);
+                doc.text(`Código: ${obra?.id || '—'}  ·  Engenheiro: ${obra?.engenheiro || '—'}`, W - MR, 16, { align: 'right' });
+                doc.text(`Semana: ${semanaStr}`, W - MR, 22, { align: 'right' });
+
+                // ── Calcular totais ──
+                let totalObra = 0, totalPresentes = 0;
+                const tableData = this.registros.map(reg => {
+                    let somaDias = 0;
+                    const dayVals = dias.map(d => {
+                        const fd = normFreq(reg.freq?.[d]);
+                        const parts = [];
+                        if (fd.M) { parts.push('M'); somaDias += per.M; }
+                        if (fd.T) { parts.push('T'); somaDias += per.T; }
+                        if (fd.N) { parts.push('N'); somaDias += per.N; }
+                        return parts.length ? parts.join('+') : '—';
+                    });
+                    const hx = reg.horas_extras || 0;
+                    const vhx = reg.valor_hora_extra || 0;
+                    const aPagar = somaDias * reg.diaria_historica + hx * vhx;
+                    totalObra += aPagar;
+                    if (somaDias > 0) totalPresentes++;
+                    return [
+                        reg.nome,
+                        reg.funcao,
+                        `R$ ${fmt(parseFloat(reg.diaria_historica))}`,
+                        ...dayVals,
+                        somaDias.toFixed(2).replace('.', ','),
+                        hx > 0 ? `${hx}h × R$${fmt(vhx)}` : '—',
+                        `R$ ${fmt(aPagar)}`
+                    ];
+                });
+
+                // ── Caixas de resumo ──
+                const statY = 33;
+                const statW = (W - ML - MR - 6) / 3;
+                const statConfigs = [
+                    { label: 'TOTAL DA OBRA', value: `R$ ${fmt(totalObra)}`, fill: [30, 58, 138] },
+                    { label: 'EFETIVO PRESENTE', value: `${totalPresentes} colaboradores`, fill: [5, 150, 105] },
+                    { label: 'MÉDIA POR PESSOA', value: `R$ ${fmt(totalPresentes > 0 ? totalObra / totalPresentes : 0)}`, fill: [71, 85, 105] },
+                ];
+                statConfigs.forEach((s, i) => {
+                    const x = ML + i * (statW + 3);
+                    doc.setFillColor(...s.fill);
+                    doc.roundedRect(x, statY, statW, 13, 1.5, 1.5, 'F');
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(6.5);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(s.label, x + 3.5, statY + 4.5);
+                    doc.setFontSize(9.5);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(s.value, x + 3.5, statY + 10.5);
+                });
+
+                // ── Tabela ──
+                doc.autoTable({
+                    startY: 50,
+                    head: [['COLABORADOR', 'FUNÇÃO', 'DIÁRIA', ...dLabels, 'DIAS', 'H.EX.', 'A PAGAR']],
+                    body: tableData,
+                    foot: [['', '', '', '', '', '', '', '', '', '', '', 'TOTAL GERAL', `R$ ${fmt(totalObra)}`]],
+                    theme: 'grid',
+                    styles: {
+                        fontSize: 7.5,
+                        cellPadding: { top: 3, bottom: 3, left: 2.5, right: 2.5 },
+                        valign: 'middle',
+                        font: 'helvetica',
+                        textColor: [30, 41, 59],
+                    },
+                    headStyles: {
+                        fillColor: [30, 58, 138],
+                        textColor: [255, 255, 255],
+                        fontStyle: 'bold',
+                        fontSize: 7,
+                        halign: 'center',
+                    },
+                    footStyles: {
+                        fillColor: [241, 245, 249],
+                        textColor: [30, 58, 138],
+                        fontStyle: 'bold',
+                        fontSize: 8.5,
+                        halign: 'right',
+                    },
+                    alternateRowStyles: { fillColor: [248, 250, 252] },
+                    columnStyles: {
+                        0: { cellWidth: 40 },
+                        1: { cellWidth: 28 },
+                        2: { cellWidth: 20, halign: 'right' },
+                        3: { cellWidth: 15, halign: 'center' },
+                        4: { cellWidth: 15, halign: 'center' },
+                        5: { cellWidth: 15, halign: 'center' },
+                        6: { cellWidth: 15, halign: 'center' },
+                        7: { cellWidth: 15, halign: 'center' },
+                        8: { cellWidth: 15, halign: 'center' },
+                        9: { cellWidth: 15, halign: 'center' },
+                        10: { cellWidth: 14, halign: 'center' },
+                        11: { cellWidth: 26, halign: 'center' },
+                        12: { cellWidth: 26, halign: 'right' },
+                    },
+                    didParseCell(data) {
+                        if (data.section === 'body') {
+                            const col = data.column.index;
+                            if (col >= 3 && col <= 9) {
+                                const v = data.cell.raw;
+                                if (v && v !== '—') {
+                                    if (v.includes('N')) {
+                                        data.cell.styles.fillColor = [238, 242, 255];
+                                        data.cell.styles.textColor = [67, 56, 202];
+                                        data.cell.styles.fontStyle = 'bold';
+                                    } else {
+                                        data.cell.styles.fillColor = [236, 253, 245];
+                                        data.cell.styles.textColor = [5, 150, 105];
+                                        data.cell.styles.fontStyle = 'bold';
+                                    }
+                                }
+                            }
+                            if (col === 12) {
+                                data.cell.styles.textColor = [30, 58, 138];
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        }
+                        if (data.section === 'foot' && data.column.index === 11) {
+                            data.cell.styles.halign = 'right';
+                        }
+                    },
+                    margin: { left: ML, right: MR },
+                });
+
+                // ── Assinatura (se couber na última página) ──
+                const finalY = doc.lastAutoTable.finalY;
+                if (finalY < H - 40) {
+                    const sigY = finalY + 12;
+                    doc.setDrawColor(200, 210, 225);
+                    doc.setTextColor(100, 116, 139);
+                    doc.setFontSize(7.5);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Assinatura do Engenheiro Responsável', ML, sigY);
+                    doc.line(ML, sigY + 10, ML + 80, sigY + 10);
+                    doc.setFontSize(7);
+                    doc.text(obra?.engenheiro || '', ML, sigY + 14);
+                    doc.text('Visto / Aprovação', W - MR - 80, sigY);
+                    doc.line(W - MR - 80, sigY + 10, W - MR, sigY + 10);
+                }
+
+                // ── Rodapé em todas as páginas ──
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setDrawColor(203, 213, 225);
+                    doc.line(ML, H - 8, W - MR, H - 8);
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(148, 163, 184);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} · Smart Folha — Norest Engenharia`, ML, H - 5);
+                    doc.text(`Pág. ${i} / ${pageCount}`, W - MR, H - 5, { align: 'right' });
+                }
+
+                const nomeArquivo = `folha-${(obra?.nome || 'obra').toLowerCase().replace(/\s+/g, '-')}-${this.config.semanaAtiva}.pdf`;
+                doc.save(nomeArquivo);
             },
 
             navigate(viewId) {
