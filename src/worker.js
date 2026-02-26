@@ -4,6 +4,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const method = request.method;
 
     // =====================================================================
     // 🛡️ HASH SHA-256
@@ -16,62 +17,106 @@ export default {
     }
 
     // =====================================================================
-    // 🔐 VALIDAÇÃO DE USUÁRIO
+    // 🔑 PAGINAÇÃO KV — lista todas as chaves sem limite de 1000 (C4)
     // =====================================================================
-    async function authenticate(username, password) {
-      const userRaw = await env.DB.get(`user:${username}`);
-      if (!userRaw) return null;
+    async function listAll(prefix) {
+      const keys = [];
+      let cursor;
+      do {
+        const r = await env.DB.list({ prefix, cursor, limit: 1000 });
+        keys.push(...r.keys);
+        cursor = r.list_complete ? null : r.cursor;
+      } while (cursor);
+      return keys;
+    }
 
-      const user = JSON.parse(userRaw);
-      const inputHash = await hashPassword(password);
+    // =====================================================================
+    // 🔐 AUTENTICAÇÃO POR TOKEN DE SESSÃO (C1)
+    // =====================================================================
+    async function authenticate() {
+      const authHeader = request.headers.get('Authorization') || '';
+      if (!authHeader.startsWith('Bearer ')) return null;
+      const token = authHeader.slice(7);
+      if (!token) return null;
+      const raw = await env.DB.get(`session:${token}`);
+      return raw ? JSON.parse(raw) : null;
+    }
 
-      if (user.password !== inputHash) return null;
+    // =====================================================================
+    // 📋 VALIDAÇÃO MATEMÁTICA DE CPF (M4, R4)
+    // =====================================================================
+    function validarCPF(cpf) {
+      cpf = cpf.replace(/\D/g, '');
+      if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+      let s = 0, r;
+      for (let i = 1; i <= 9; i++) s += +cpf[i - 1] * (11 - i);
+      r = (s * 10) % 11; if (r >= 10) r = 0;
+      if (r !== +cpf[9]) return false;
+      s = 0;
+      for (let i = 1; i <= 10; i++) s += +cpf[i - 1] * (12 - i);
+      r = (s * 10) % 11; if (r >= 10) r = 0;
+      return r === +cpf[10];
+    }
 
-      return user;
+    // Helper para respostas JSON com header de segurança
+    function jsonResponse(data, status = 200) {
+      return new Response(JSON.stringify(data), {
+        status,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Content-Type-Options': 'nosniff',
+        }
+      });
     }
 
     // --- ROTA: FRONTEND ---
-    if (request.method === "GET" && path === "/") {
+    if (method === "GET" && path === "/") {
       return new Response(html, {
-        headers: { "Content-Type": "text/html;charset=UTF-8" },
+        headers: {
+          "Content-Type": "text/html;charset=UTF-8",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+            "font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+            "img-src * data:",
+            "frame-src https://drive.google.com https://1drv.ms https://onedrive.live.com https://www.dropbox.com",
+            "connect-src 'self'"
+          ].join('; ')
+        },
       });
     }
 
     // --- ROTA: REGISTER ---
-    if (request.method === "POST" && path === "/api/register") {
+    if (method === "POST" && path === "/api/register") {
       try {
         const { username, password, token } = await request.json();
 
         if (!username || !password || !token) {
-          return new Response(JSON.stringify({ error: "Dados incompletos." }), { status: 400 });
+          return jsonResponse({ error: "Dados incompletos." }, 400);
         }
 
         if (token !== env.REGISTRATION_TOKEN) {
-          return new Response(JSON.stringify({ error: "Token inválido." }), { status: 403 });
+          return jsonResponse({ error: "Token inválido." }, 403);
         }
 
         const existing = await env.DB.get(`user:${username}`);
         if (existing) {
-          return new Response(JSON.stringify({ error: "Usuário já existe." }), { status: 400 });
+          return jsonResponse({ error: "Usuário já existe." }, 400);
         }
 
         const hashedPassword = await hashPassword(password);
+        await env.DB.put(`user:${username}`, JSON.stringify({ password: hashedPassword, data: {} }));
 
-        const userData = {
-          password: hashedPassword,
-          data: {}
-        };
-
-        await env.DB.put(`user:${username}`, JSON.stringify(userData));
-
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro no registro." }), { status: 500 });
+        return jsonResponse({ error: "Erro no registro." }, 500);
       }
     }
 
     // --- ROTA: LOGIN ---
-    if (request.method === "POST" && path === "/api/login") {
+    if (method === "POST" && path === "/api/login") {
       try {
         const ip = request.headers.get("CF-Connecting-IP") || "unknown";
         const blockKey = `block:${ip}`;
@@ -80,9 +125,7 @@ export default {
         const attempts = attemptsRaw ? parseInt(attemptsRaw) : 0;
 
         if (attempts >= 5) {
-          return new Response(JSON.stringify({
-            error: "Bloqueado por excesso de tentativas."
-          }), { status: 429 });
+          return jsonResponse({ error: "Bloqueado por excesso de tentativas." }, 429);
         }
 
         const { username, password } = await request.json();
@@ -92,10 +135,9 @@ export default {
         }
 
         const userRaw = await env.DB.get(`user:${username}`);
-
         if (!userRaw) {
           await registerFailure();
-          return new Response(JSON.stringify({ error: "Credenciais inválidas." }), { status: 401 });
+          return jsonResponse({ error: "Credenciais inválidas." }, 401);
         }
 
         const user = JSON.parse(userRaw);
@@ -103,42 +145,61 @@ export default {
 
         if (user.password !== inputHash) {
           await registerFailure();
-          return new Response(JSON.stringify({ error: "Credenciais inválidas." }), { status: 401 });
+          return jsonResponse({ error: "Credenciais inválidas." }, 401);
         }
 
         await env.DB.delete(blockKey);
 
-        return new Response(JSON.stringify({ success: true }));
+        // Gera token de sessão com TTL de 8 horas (C1, D8)
+        const token = crypto.randomUUID();
+        await env.DB.put(`session:${token}`, JSON.stringify({ username }), { expirationTtl: 28800 });
+
+        return jsonResponse({ success: true, token });
 
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro no login." }), { status: 500 });
+        return jsonResponse({ error: "Erro no login." }, 500);
       }
+    }
+
+    // --- ROTA: LOGOUT (C1, D8) ---
+    if (method === "POST" && path === "/api/logout") {
+      const authHeader = request.headers.get('Authorization') || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      if (token) await env.DB.delete(`session:${token}`);
+      return jsonResponse({ success: true });
+    }
+
+    // --- ROTA: ME — valida sessão (C1) ---
+    if (method === "GET" && path === "/api/me") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Sessão inválida." }, 401);
+      return jsonResponse({ username: session.username });
     }
 
     // =====================================================================
     // 👷 FUNCIONÁRIOS
     // =====================================================================
 
-    if (request.method === "POST" && path === "/api/funcionario") {
+    if (method === "POST" && path === "/api/funcionario") {
       try {
-        const { username, password, funcionario } = await request.json();
+        const { funcionario } = await request.json();
 
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         if (!funcionario?.cpf || !funcionario?.nome || !funcionario?.funcao || !funcionario?.diaria) {
-          return new Response(JSON.stringify({ error: "CPF, nome, função e diária são obrigatórios." }), { status: 400 });
+          return jsonResponse({ error: "CPF, nome, função e diária são obrigatórios." }, 400);
         }
 
         const cpf = funcionario.cpf.replace(/\D/g, '');
-        if (cpf.length !== 11) {
-          return new Response(JSON.stringify({ error: "CPF inválido." }), { status: 400 });
+        if (!validarCPF(cpf)) {
+          return jsonResponse({ error: "CPF inválido." }, 400);
         }
 
         const key = `funcionario:${cpf}`;
         const existing = await env.DB.get(key);
         if (existing) {
-          return new Response(JSON.stringify({ error: "Funcionário já existe." }), { status: 400 });
+          return jsonResponse({ error: "Funcionário já existe." }, 400);
         }
 
         await env.DB.put(key, JSON.stringify({
@@ -149,34 +210,36 @@ export default {
           criado_em: Date.now()
         }));
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
 
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao criar funcionário." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao criar funcionário." }, 500);
       }
     }
 
-    if (request.method === "GET" && path === "/api/funcionarios") {
-      const list = await env.DB.list({ prefix: "funcionario:" });
-      const items = await Promise.all(list.keys.map(k => env.DB.get(k.name)));
-      return new Response(JSON.stringify(items.map(JSON.parse)));
+    if (method === "GET" && path === "/api/funcionarios") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
+      const keys = await listAll("funcionario:");
+      const items = await Promise.all(keys.map(k => env.DB.get(k.name)));
+      return jsonResponse(items.filter(Boolean).map(JSON.parse));
     }
 
-    if (request.method === "PUT" && path.startsWith("/api/funcionario/")) {
+    if (method === "PUT" && path.startsWith("/api/funcionario/")) {
       try {
-        const { username, password, funcionario } = await request.json();
+        const { funcionario } = await request.json();
 
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         const cpf = decodeURIComponent(path.split("/api/funcionario/")[1]);
         const key = `funcionario:${cpf}`;
 
         const existing = await env.DB.get(key);
-        if (!existing) return new Response(JSON.stringify({ error: "Funcionário não encontrado." }), { status: 404 });
+        if (!existing) return jsonResponse({ error: "Funcionário não encontrado." }, 404);
 
         if (!funcionario?.nome || !funcionario?.funcao || !funcionario?.diaria) {
-          return new Response(JSON.stringify({ error: "Nome, função e diária são obrigatórios." }), { status: 400 });
+          return jsonResponse({ error: "Nome, função e diária são obrigatórios." }, 400);
         }
 
         const current = JSON.parse(existing);
@@ -184,33 +247,33 @@ export default {
           ...current,
           nome: funcionario.nome.trim().toUpperCase(),
           funcao: funcionario.funcao.trim().toUpperCase(),
-          diaria: parseFloat(funcionario.diaria)
+          diaria: parseFloat(funcionario.diaria),
+          modificado_por: session.username,
+          modificado_em: Date.now()
         }));
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao editar funcionário." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao editar funcionário." }, 500);
       }
     }
 
-    if (request.method === "DELETE" && path.startsWith("/api/funcionario/")) {
+    if (method === "DELETE" && path.startsWith("/api/funcionario/")) {
       try {
-        const { username, password } = await request.json();
-
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         const cpf = decodeURIComponent(path.split("/api/funcionario/")[1]);
         const key = `funcionario:${cpf}`;
 
         const existing = await env.DB.get(key);
-        if (!existing) return new Response(JSON.stringify({ error: "Funcionário não encontrado." }), { status: 404 });
+        if (!existing) return jsonResponse({ error: "Funcionário não encontrado." }, 404);
 
         await env.DB.delete(key);
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao excluir funcionário." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao excluir funcionário." }, 500);
       }
     }
 
@@ -218,15 +281,15 @@ export default {
     // 🏗️ OBRAS
     // =====================================================================
 
-    if (request.method === "POST" && path === "/api/obra") {
+    if (method === "POST" && path === "/api/obra") {
       try {
-        const { username, password, obra } = await request.json();
+        const { obra } = await request.json();
 
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         if (!obra?.id || !obra?.nome || !obra?.engenheiro) {
-          return new Response(JSON.stringify({ error: "Código, nome e engenheiro são obrigatórios." }), { status: 400 });
+          return jsonResponse({ error: "Código, nome e engenheiro são obrigatórios." }, 400);
         }
 
         const id = obra.id.trim().toUpperCase();
@@ -234,7 +297,7 @@ export default {
 
         const existing = await env.DB.get(key);
         if (existing) {
-          return new Response(JSON.stringify({ error: "Obra já existe." }), { status: 400 });
+          return jsonResponse({ error: "Obra já existe." }, 400);
         }
 
         await env.DB.put(key, JSON.stringify({
@@ -243,38 +306,36 @@ export default {
           criado_em: Date.now()
         }));
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
 
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao criar obra" }), { status: 500 });
+        return jsonResponse({ error: "Erro ao criar obra" }, 500);
       }
     }
 
-    if (request.method === "GET" && path === "/api/obras") {
-      const list = await env.DB.list({ prefix: "obra:" });
-
-      const items = await Promise.all(
-        list.keys.map(k => env.DB.get(k.name))
-      );
-
-      return new Response(JSON.stringify(items.map(JSON.parse)));
+    if (method === "GET" && path === "/api/obras") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
+      const keys = await listAll("obra:");
+      const items = await Promise.all(keys.map(k => env.DB.get(k.name)));
+      return jsonResponse(items.filter(Boolean).map(JSON.parse));
     }
 
-    if (request.method === "PUT" && path.startsWith("/api/obra/")) {
+    if (method === "PUT" && path.startsWith("/api/obra/")) {
       try {
-        const { username, password, obra } = await request.json();
+        const { obra } = await request.json();
 
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         const id = decodeURIComponent(path.split("/api/obra/")[1]).toUpperCase();
         const key = `obra:${id}`;
 
         const existing = await env.DB.get(key);
-        if (!existing) return new Response(JSON.stringify({ error: "Obra não encontrada." }), { status: 404 });
+        if (!existing) return jsonResponse({ error: "Obra não encontrada." }, 404);
 
         if (!obra?.nome || !obra?.engenheiro) {
-          return new Response(JSON.stringify({ error: "Nome e engenheiro são obrigatórios." }), { status: 400 });
+          return jsonResponse({ error: "Nome e engenheiro são obrigatórios." }, 400);
         }
 
         const current = JSON.parse(existing);
@@ -287,34 +348,43 @@ export default {
           data_termino: obra.data_termino !== undefined ? obra.data_termino : (current.data_termino ?? null),
           progresso:    obra.progresso    !== undefined ? obra.progresso    : (current.progresso    ?? 0),
           status:       obra.status       || current.status || 'em_andamento',
+          modificado_por: session.username,
+          modificado_em: Date.now()
         };
         if (obra.periodos) updated.periodos = obra.periodos;
         await env.DB.put(key, JSON.stringify(updated));
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao editar obra." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao editar obra." }, 500);
       }
     }
 
-    if (request.method === "DELETE" && path.startsWith("/api/obra/")) {
+    if (method === "DELETE" && path.startsWith("/api/obra/")) {
       try {
-        const { username, password } = await request.json();
-
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
 
         const id = decodeURIComponent(path.split("/api/obra/")[1]).toUpperCase();
         const key = `obra:${id}`;
 
         const existing = await env.DB.get(key);
-        if (!existing) return new Response(JSON.stringify({ error: "Obra não encontrada." }), { status: 404 });
+        if (!existing) return jsonResponse({ error: "Obra não encontrada." }, 404);
 
-        await env.DB.delete(key);
+        // Cascade delete: remove folhas, adicionais e fotos associadas (C3)
+        const [fl, ad, fo] = await Promise.all([
+          listAll(`folha:${id}:`),
+          listAll(`adicionais:${id}:`),
+          listAll(`fotos:${id}:`)
+        ]);
+        await Promise.all([
+          env.DB.delete(key),
+          ...[...fl, ...ad, ...fo].map(k => env.DB.delete(k.name))
+        ]);
 
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao excluir obra." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao excluir obra." }, 500);
       }
     }
 
@@ -322,53 +392,63 @@ export default {
     // 📋 FOLHA DE FREQUÊNCIA
     // =====================================================================
 
-    if (request.method === "GET" && path === "/api/folha") {
+    if (method === "GET" && path === "/api/folha") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const obra = url.searchParams.get("obra");
       const semana = url.searchParams.get("semana");
-      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      if (!obra || !semana) return jsonResponse({ error: "Parâmetros obrigatórios." }, 400);
       const data = await env.DB.get(`folha:${obra}:${semana}`);
-      if (!data) return new Response(JSON.stringify({ registros: [] }));
-      return new Response(data, { headers: { "Content-Type": "application/json" } });
+      if (!data) return jsonResponse({ registros: [] });
+      return new Response(data, { headers: { 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' } });
     }
 
-    if (request.method === "POST" && path === "/api/folha") {
+    if (method === "POST" && path === "/api/folha") {
       try {
-        const { username, password, obra, semana, registros } = await request.json();
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const { obra, semana, registros } = await request.json();
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
         if (!obra || !semana || !Array.isArray(registros)) {
-          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+          return jsonResponse({ error: "Dados inválidos." }, 400);
         }
-        await env.DB.put(`folha:${obra}:${semana}`, JSON.stringify({ obra, semana, registros, atualizado_em: Date.now() }));
-        return new Response(JSON.stringify({ success: true }));
+        await env.DB.put(`folha:${obra}:${semana}`, JSON.stringify({
+          obra, semana, registros,
+          modificado_por: session.username,
+          atualizado_em: Date.now()
+        }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao salvar folha." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao salvar folha." }, 500);
       }
     }
 
-    if (request.method === "GET" && path === "/api/folhas") {
+    if (method === "GET" && path === "/api/folhas") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const semana = url.searchParams.get("semana");
-      if (!semana) return new Response(JSON.stringify({ error: "Parâmetro 'semana' obrigatório." }), { status: 400 });
-      const list = await env.DB.list({ prefix: "folha:" });
-      const matchingKeys = list.keys.filter(k => k.name.endsWith(`:${semana}`));
-      if (!matchingKeys.length) return new Response(JSON.stringify([]));
+      if (!semana) return jsonResponse({ error: "Parâmetro 'semana' obrigatório." }, 400);
+      const keys = await listAll("folha:");
+      const matchingKeys = keys.filter(k => k.name.endsWith(`:${semana}`));
+      if (!matchingKeys.length) return jsonResponse([]);
       const items = await Promise.all(matchingKeys.map(k => env.DB.get(k.name)));
-      return new Response(JSON.stringify(items.filter(Boolean).map(JSON.parse)));
+      return jsonResponse(items.filter(Boolean).map(JSON.parse));
     }
 
     // =====================================================================
     // 📊 CUSTO ACUMULADO POR OBRA (para Dashboard)
     // =====================================================================
 
-    if (request.method === "GET" && path === "/api/custo-obras") {
+    if (method === "GET" && path === "/api/custo-obras") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const dias = ['dom','seg','ter','qua','qui','sex','sab'];
-      const [folhaList, adicionaisList] = await Promise.all([
-        env.DB.list({ prefix: "folha:" }),
-        env.DB.list({ prefix: "adicionais:" })
+      const [folhaKeys, adicionaisKeys] = await Promise.all([
+        listAll("folha:"),
+        listAll("adicionais:")
       ]);
       const [folhaItems, adicionaisItems] = await Promise.all([
-        Promise.all(folhaList.keys.map(k => env.DB.get(k.name))),
-        Promise.all(adicionaisList.keys.map(k => env.DB.get(k.name)))
+        Promise.all(folhaKeys.map(k => env.DB.get(k.name))),
+        Promise.all(adicionaisKeys.map(k => env.DB.get(k.name)))
       ]);
       const custoPorObra = {};
       folhaItems.filter(Boolean).map(JSON.parse).forEach(folha => {
@@ -390,34 +470,40 @@ export default {
         const totalAd = ad.itens.reduce((s, i) => s + (parseFloat(i.valor) || 0), 0);
         custoPorObra[ad.obra] = (custoPorObra[ad.obra] || 0) + totalAd;
       });
-      return new Response(JSON.stringify(custoPorObra), { headers: { "Content-Type": "application/json" } });
+      return jsonResponse(custoPorObra);
     }
 
     // =====================================================================
     // 💰 ADICIONAIS FINANCEIROS POR OBRA
     // =====================================================================
 
-    if (request.method === "GET" && path === "/api/adicionais") {
+    if (method === "GET" && path === "/api/adicionais") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const obra = url.searchParams.get("obra");
       const semana = url.searchParams.get("semana");
-      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      if (!obra || !semana) return jsonResponse({ error: "Parâmetros obrigatórios." }, 400);
       const data = await env.DB.get(`adicionais:${obra}:${semana}`);
-      if (!data) return new Response(JSON.stringify({ itens: [] }));
-      return new Response(data, { headers: { "Content-Type": "application/json" } });
+      if (!data) return jsonResponse({ itens: [] });
+      return new Response(data, { headers: { 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' } });
     }
 
-    if (request.method === "POST" && path === "/api/adicionais") {
+    if (method === "POST" && path === "/api/adicionais") {
       try {
-        const { username, password, obra, semana, itens } = await request.json();
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const { obra, semana, itens } = await request.json();
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
         if (!obra || !semana || !Array.isArray(itens)) {
-          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+          return jsonResponse({ error: "Dados inválidos." }, 400);
         }
-        await env.DB.put(`adicionais:${obra}:${semana}`, JSON.stringify({ obra, semana, itens, atualizado_em: Date.now() }));
-        return new Response(JSON.stringify({ success: true }));
+        await env.DB.put(`adicionais:${obra}:${semana}`, JSON.stringify({
+          obra, semana, itens,
+          modificado_por: session.username,
+          atualizado_em: Date.now()
+        }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao salvar adicionais." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao salvar adicionais." }, 500);
       }
     }
 
@@ -425,27 +511,29 @@ export default {
     // 📸 FOTOS DA SEMANA
     // =====================================================================
 
-    if (request.method === "GET" && path === "/api/fotos") {
+    if (method === "GET" && path === "/api/fotos") {
+      const session = await authenticate();
+      if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const obra = url.searchParams.get("obra");
       const semana = url.searchParams.get("semana");
-      if (!obra || !semana) return new Response(JSON.stringify({ error: "Parâmetros obrigatórios." }), { status: 400 });
+      if (!obra || !semana) return jsonResponse({ error: "Parâmetros obrigatórios." }, 400);
       const data = await env.DB.get(`fotos:${obra}:${semana}`);
-      if (!data) return new Response(JSON.stringify({ fotos: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null } }));
-      return new Response(data, { headers: { "Content-Type": "application/json" } });
+      if (!data) return jsonResponse({ fotos: { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null } });
+      return new Response(data, { headers: { 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' } });
     }
 
-    if (request.method === "POST" && path === "/api/fotos") {
+    if (method === "POST" && path === "/api/fotos") {
       try {
-        const { username, password, obra, semana, fotos } = await request.json();
-        const user = await authenticate(username, password);
-        if (!user) return new Response(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+        const { obra, semana, fotos } = await request.json();
+        const session = await authenticate();
+        if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
         if (!obra || !semana || typeof fotos !== 'object') {
-          return new Response(JSON.stringify({ error: "Dados inválidos." }), { status: 400 });
+          return jsonResponse({ error: "Dados inválidos." }, 400);
         }
         await env.DB.put(`fotos:${obra}:${semana}`, JSON.stringify({ obra, semana, fotos, atualizado_em: Date.now() }));
-        return new Response(JSON.stringify({ success: true }));
+        return jsonResponse({ success: true });
       } catch (err) {
-        return new Response(JSON.stringify({ error: "Erro ao salvar fotos." }), { status: 500 });
+        return jsonResponse({ error: "Erro ao salvar fotos." }, 500);
       }
     }
 

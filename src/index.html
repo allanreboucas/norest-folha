@@ -555,21 +555,23 @@
     </div>
 
     <script>
-        // --- SISTEMA DE NOTIFICAÇÕES (Restaurado) ---
+        // --- SISTEMA DE NOTIFICAÇÕES — XSS-safe (R1, C2) ---
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toast-container');
             const el = document.createElement('div');
             const colors = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-red-600' : 'bg-amber-500');
             const icon = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
             el.className = `p-4 rounded-lg shadow-xl flex items-center gap-3 w-80 text-white text-sm font-bold animate-toast-in ${colors}`;
-            el.innerHTML = `<i class="fas ${icon} text-lg"></i> <span>${msg}</span>`;
+            const ico = document.createElement('i'); ico.className = `fas ${icon} text-lg`;
+            const sp = document.createElement('span'); sp.textContent = msg;
+            el.appendChild(ico); el.appendChild(sp);
             container.appendChild(el);
             setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(-10px)'; el.style.transition = 'all 0.4s'; setTimeout(() => el.remove(), 400); }, 3500);
         }
 
-        // --- SISTEMA DE AUTENTICAÇÃO (Robusto) ---
+        // --- SISTEMA DE AUTENTICAÇÃO COM TOKEN DE SESSÃO (C1) ---
         const auth = {
-            currentUser: '', passCache: '',
+            currentUser: '', token: '',
             toggleMode: () => {
                 document.getElementById('form-login').classList.toggle('hidden');
                 document.getElementById('form-register').classList.toggle('hidden');
@@ -584,9 +586,11 @@
                     const res = await fetch('/api/login', { method: 'POST', body: JSON.stringify({username: u, password: p}) });
                     const json = await res.json();
                     if(json.error) throw new Error(json.error);
-                    this.currentUser = u; this.passCache = p;
+                    this.currentUser = u;
+                    this.token = json.token;
                     sessionStorage.setItem('nr_u', u);
-                    sessionStorage.setItem('nr_p', p);
+                    sessionStorage.setItem('nr_tok', json.token);
+                    sessionStorage.removeItem('nr_p'); // limpa sessão legada
                     auth.abrirApp(u);
                 } catch(e) { this.msg(e.message); showToast(e.message, 'error'); }
             },
@@ -609,25 +613,38 @@
                 document.getElementById('user-tag-mob').innerText = u;
                 app.init();
             },
-            logout() { sessionStorage.removeItem('nr_u'); sessionStorage.removeItem('nr_p'); location.reload(); },
+            async logout() {
+                try { await authFetch('/api/logout', { method: 'POST' }); } catch(e) {}
+                sessionStorage.removeItem('nr_u');
+                sessionStorage.removeItem('nr_tok');
+                sessionStorage.removeItem('nr_p');
+                location.reload();
+            },
             msg: (t, c="text-red-500") => { const el = document.getElementById('auth-msg'); el.innerText = t; el.className = `text-xs font-bold mt-4 h-4 ${c}`; }
         };
 
-        // Auto-restaurar sessão ao recarregar a página
+        // Helper: fetch autenticado com token Bearer (H2)
+        function authFetch(url, opts = {}) {
+            opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${auth.token}` };
+            return fetch(url, opts);
+        }
+
+        // Auto-restaurar sessão via token (C1 — sem reenvio de senha)
         (async () => {
-            const u = sessionStorage.getItem('nr_u');
-            const p = sessionStorage.getItem('nr_p');
-            if (!u || !p) return;
+            sessionStorage.removeItem('nr_p'); // limpa credencial legada
+            const u   = sessionStorage.getItem('nr_u');
+            const tok = sessionStorage.getItem('nr_tok');
+            if (!u || !tok) return;
             try {
-                const res = await fetch('/api/login', { method: 'POST', body: JSON.stringify({ username: u, password: p }) });
+                const res = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${tok}` } });
                 const json = await res.json();
                 if (json.error) throw new Error();
                 auth.currentUser = u;
-                auth.passCache = p;
+                auth.token = tok;
                 auth.abrirApp(u);
             } catch(e) {
                 sessionStorage.removeItem('nr_u');
-                sessionStorage.removeItem('nr_p');
+                sessionStorage.removeItem('nr_tok');
             }
         })();
 
@@ -649,6 +666,27 @@
             return null;
         }
 
+        // --- esc(): sanitização HTML — previne XSS em innerHTML (C2, R1) ---
+        function esc(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // --- validarCPF(): dígitos verificadores mod 11 (M4, R4) ---
+        function validarCPF(cpf) {
+            cpf = cpf.replace(/\D/g, '');
+            if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+            let s = 0, r;
+            for (let i = 1; i <= 9; i++) s += +cpf[i-1] * (11 - i);
+            r = (s * 10) % 11; if (r >= 10) r = 0;
+            if (r !== +cpf[9]) return false;
+            s = 0;
+            for (let i = 1; i <= 10; i++) s += +cpf[i-1] * (12 - i);
+            r = (s * 10) % 11; if (r >= 10) r = 0;
+            return r === +cpf[10];
+        }
+
         // --- MOTOR SMART GRID ---
         const app = {
             config: { obraAtiva: null, semanaAtiva: null },
@@ -657,6 +695,17 @@
             registros: [],
             conflictMap: {},
             totalMO: 0,
+            dirty: false,
+
+            setDirty(val) {
+                this.dirty = val;
+                const btn = document.getElementById('btn-salvar');
+                if (!btn) return;
+                btn.classList.toggle('ring-2', val);
+                btn.classList.toggle('ring-amber-400', val);
+                const dot = val ? '<i class="fas fa-circle text-amber-300 text-[8px] mr-1 animate-pulse"></i>' : '';
+                btn.innerHTML = `${dot}<i class="fas fa-floppy-disk mr-1"></i>Salvar Semana`;
+            },
 
             atualizarStatTotal() {
                 const total = this.totalMO + (typeof adicionais !== 'undefined' ? adicionais.total() : 0);
@@ -692,8 +741,8 @@
                 document.getElementById('semana-label').innerText = this.formatarIntervalo(this.config.semanaAtiva);
 
                 const [obrasData, colabData] = await Promise.all([
-                    fetch('/api/obras').then(r => r.json()).catch(() => []),
-                    fetch('/api/funcionarios').then(r => r.json()).catch(() => [])
+                    authFetch('/api/obras').then(r => r.json()).catch(() => []),
+                    authFetch('/api/funcionarios').then(r => r.json()).catch(() => [])
                 ]);
 
                 this.obrasList = Array.isArray(obrasData) ? obrasData : [];
@@ -714,7 +763,15 @@
                 await this.carregarFolha();
             },
 
-            navSemana(delta) {
+            async navSemana(delta) {
+                if (this.dirty) {
+                    const ok = await confirmar.abrir(
+                        'Alterações não salvas',
+                        'Há alterações não salvas nesta folha. Deseja descartar e navegar para outra semana?',
+                        { botao: 'Descartar e continuar', cor: 'bg-amber-600 hover:bg-amber-700', icone: 'fa-exclamation-triangle text-amber-500' }
+                    );
+                    if (!ok) return;
+                }
                 const atual = new Date(this.config.semanaAtiva + 'T12:00:00');
                 atual.setDate(atual.getDate() + delta * 7);
                 this.config.semanaAtiva = this.toKey(atual);
@@ -722,7 +779,18 @@
                 this.carregarFolha();
             },
 
-            trocarObra() {
+            async trocarObra() {
+                if (this.dirty) {
+                    const ok = await confirmar.abrir(
+                        'Alterações não salvas',
+                        'Há alterações não salvas nesta folha. Deseja descartar e trocar de obra?',
+                        { botao: 'Descartar e continuar', cor: 'bg-amber-600 hover:bg-amber-700', icone: 'fa-exclamation-triangle text-amber-500' }
+                    );
+                    if (!ok) {
+                        document.getElementById('select-obra').value = this.config.obraAtiva || '';
+                        return;
+                    }
+                }
                 this.config.obraAtiva = document.getElementById('select-obra').value;
                 this.carregarFolha();
             },
@@ -752,6 +820,7 @@
             },
 
             async carregarFolha() {
+                this.setDirty(false);
                 if (!this.config.obraAtiva) {
                     this.registros = [];
                     this.conflictMap = {};
@@ -762,8 +831,8 @@
                 }
                 try {
                     const [data, todasFolhas] = await Promise.all([
-                        fetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`).then(r => r.json()),
-                        fetch(`/api/folhas?semana=${this.config.semanaAtiva}`).then(r => r.json()).catch(() => [])
+                        authFetch(`/api/folha?obra=${encodeURIComponent(this.config.obraAtiva)}&semana=${this.config.semanaAtiva}`).then(r => r.json()),
+                        authFetch(`/api/folhas?semana=${this.config.semanaAtiva}`).then(r => r.json()).catch(() => [])
                     ]);
 
                     this.conflictMap = this.buildConflictMap(Array.isArray(todasFolhas) ? todasFolhas : []);
@@ -869,8 +938,8 @@
                         <td class="p-4 text-left border-r group-hover:bg-white transition-colors">
                             <div class="flex items-center justify-between gap-1">
                                 <div>
-                                    <div class="font-bold text-slate-700">${reg.nome}</div>
-                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${reg.funcao}</div>
+                                    <div class="font-bold text-slate-700">${esc(reg.nome)}</div>
+                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${esc(reg.funcao)}</div>
                                 </div>
                                 <button onclick="app.removerColaborador(${idx})" class="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 transition-all shrink-0" title="Remover da folha"><i class="fas fa-times text-[10px]"></i></button>
                             </div>
@@ -915,8 +984,8 @@
                     cards.push(`<div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <div class="flex items-center justify-between p-3 bg-slate-50 border-b border-gray-100">
                             <div>
-                                <div class="font-bold text-slate-700 text-sm">${reg.nome}</div>
-                                <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">${reg.funcao} · R$ ${parseFloat(reg.diaria_historica).toLocaleString('pt-BR', {minimumFractionDigits: 2})}/dia</div>
+                                <div class="font-bold text-slate-700 text-sm">${esc(reg.nome)}</div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">${esc(reg.funcao)} · R$ ${parseFloat(reg.diaria_historica).toLocaleString('pt-BR', {minimumFractionDigits: 2})}/dia</div>
                             </div>
                             <div class="text-right">
                                 <div class="text-[9px] text-slate-400 uppercase font-bold">A Pagar</div>
@@ -976,11 +1045,13 @@
                     // next === 'half' && ci.equiv < 1 → permitido (½ + ½ = dia completo, válido)
                 }
                 reg.freq[dia] = next;
+                this.setDirty(true);
                 this.renderGrid();
             },
 
             setField(idx, field, value) {
                 this.registros[idx][field] = Math.max(0, parseFloat(value) || 0);
+                this.setDirty(true);
                 this.renderGrid();
             },
 
@@ -1031,11 +1102,9 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 try {
-                    const res = await fetch('/api/folha', {
+                    const res = await authFetch('/api/folha', {
                         method: 'POST',
                         body: JSON.stringify({
-                            username: auth.currentUser,
-                            password: auth.passCache,
                             obra: this.config.obraAtiva,
                             semana: this.config.semanaAtiva,
                             registros: this.registros
@@ -1043,6 +1112,7 @@
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
+                    this.setDirty(false);
                     showToast('Frequência salva com sucesso!');
                 } catch(e) {
                     showToast(e.message, 'error');
@@ -1054,8 +1124,8 @@
 
             async recarregarFolha() {
                 const [obrasData, colabData] = await Promise.all([
-                    fetch('/api/obras').then(r => r.json()).catch(() => []),
-                    fetch('/api/funcionarios').then(r => r.json()).catch(() => [])
+                    authFetch('/api/obras').then(r => r.json()).catch(() => []),
+                    authFetch('/api/funcionarios').then(r => r.json()).catch(() => [])
                 ]);
                 this.obrasList = Array.isArray(obrasData) ? obrasData : [];
                 this.colaboradores = Array.isArray(colabData) ? colabData : [];
@@ -1151,8 +1221,9 @@
                 // ── Caixas de resumo ──
                 const statY = 33;
                 const statW = (W - ML - MR - 6) / 3;
+                const totalAdicionais = adicionais.total();
                 const statConfigs = [
-                    { label: 'TOTAL DA OBRA', value: `R$ ${fmt(totalObra)}`, fill: [30, 58, 138] },
+                    { label: 'TOTAL DA OBRA', value: `R$ ${fmt(totalObra + totalAdicionais)}`, fill: [30, 58, 138] },
                     { label: 'EFETIVO PRESENTE', value: `${totalPresentes} colaboradores`, fill: [5, 150, 105] },
                     { label: 'MÉDIA POR PESSOA', value: `R$ ${fmt(totalPresentes > 0 ? totalObra / totalPresentes : 0)}`, fill: [71, 85, 105] },
                 ];
@@ -1241,11 +1312,63 @@
                             data.cell.styles.halign = 'right';
                         }
                     },
-                    margin: { left: ML, right: MR },
+                    didDrawPage(data) {
+                        if (data.pageNumber > 1) {
+                            doc.setFillColor(30, 58, 138);
+                            doc.rect(0, 0, W, 10, 'F');
+                            doc.setTextColor(255, 255, 255);
+                            doc.setFontSize(7);
+                            doc.setFont('helvetica', 'bold');
+                            doc.text('NOREST ENGENHARIA', ML, 7);
+                            doc.setFont('helvetica', 'normal');
+                            doc.text(`${obra?.nome || '—'} · Semana: ${semanaStr}`, W - MR, 7, { align: 'right' });
+                        }
+                    },
+                    margin: { left: ML, right: MR, top: 14 },
                 });
 
+                // ── Adicionais financeiros ──
+                let finalY = doc.lastAutoTable.finalY;
+                if (adicionais.itens.length > 0) {
+                    if (finalY > H - 50) { doc.addPage(); finalY = 14; }
+                    const ay = finalY + 8;
+                    doc.setFillColor(248, 250, 252);
+                    doc.roundedRect(ML, ay, W - ML - MR, 8 + adicionais.itens.length * 6 + 8, 1.5, 1.5, 'F');
+                    doc.setDrawColor(203, 213, 225);
+                    doc.roundedRect(ML, ay, W - ML - MR, 8 + adicionais.itens.length * 6 + 8, 1.5, 1.5, 'S');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(30, 58, 138);
+                    doc.text('ADICIONAIS DA SEMANA', ML + 3, ay + 5.5);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(51, 65, 85);
+                    doc.setFontSize(7);
+                    adicionais.itens.forEach((item, i) => {
+                        const iy = ay + 10 + i * 6;
+                        doc.text(`• ${item.descricao || '(sem descrição)'}`, ML + 4, iy);
+                        doc.text(`R$ ${fmt(parseFloat(item.valor) || 0)}`, W - MR - 3, iy, { align: 'right' });
+                    });
+                    const stY = ay + 10 + adicionais.itens.length * 6 + 1;
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(30, 58, 138);
+                    doc.text('Subtotal Adicionais:', ML + 4, stY);
+                    doc.text(`R$ ${fmt(totalAdicionais)}`, W - MR - 3, stY, { align: 'right' });
+                    finalY = stY + 4;
+
+                    // Total Geral (MO + Adicionais)
+                    const tgY = finalY + 6;
+                    doc.setFillColor(30, 58, 138);
+                    doc.roundedRect(ML, tgY, W - ML - MR, 10, 1.5, 1.5, 'F');
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(8.5);
+                    doc.text('TOTAL GERAL (MO + Adicionais)', ML + 4, tgY + 6.5);
+                    doc.text(`R$ ${fmt(totalObra + totalAdicionais)}`, W - MR - 3, tgY + 6.5, { align: 'right' });
+                    finalY = tgY + 10;
+                }
+
                 // ── Assinatura (se couber na última página) ──
-                const finalY = doc.lastAutoTable.finalY;
                 if (finalY < H - 40) {
                     const sigY = finalY + 12;
                     doc.setDrawColor(200, 210, 225);
@@ -1329,6 +1452,7 @@
         };
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') { confirmar.cancelar(); fotos.fecharModal(); fotos.cancelarEdit(); } });
+        window.addEventListener('beforeunload', e => { if (app.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
         // --- MÓDULO DE EQUIPE ---
         const equipe = {
@@ -1345,7 +1469,7 @@
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
                 cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Carregando...</div>';
                 try {
-                    const res = await fetch('/api/funcionarios');
+                    const res = await authFetch('/api/funcionarios');
                     this.lista = await res.json();
                     this.render();
                 } catch(e) {
@@ -1369,8 +1493,8 @@
                 tbody.innerHTML = sorted.map(c => `
                     <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
                         <td class="p-4 font-mono text-slate-500 text-xs border-r">${this.formatCPF(c.cpf)}</td>
-                        <td class="p-4 font-bold text-slate-700 border-r">${c.nome}</td>
-                        <td class="p-4 text-slate-600 border-r">${c.funcao}</td>
+                        <td class="p-4 font-bold text-slate-700 border-r">${esc(c.nome)}</td>
+                        <td class="p-4 text-slate-600 border-r">${esc(c.funcao)}</td>
                         <td class="p-4 text-slate-700 font-semibold border-r">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td class="p-4 text-center">
                             <div class="flex gap-2 justify-center">
@@ -1388,8 +1512,8 @@
                             <i class="fas fa-user text-norest-blue text-sm"></i>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="font-bold text-slate-800 text-sm truncate">${c.nome}</p>
-                            <p class="text-[11px] text-slate-500 truncate">${c.funcao} &bull; <span class="font-mono">${this.formatCPF(c.cpf)}</span></p>
+                            <p class="font-bold text-slate-800 text-sm truncate">${esc(c.nome)}</p>
+                            <p class="text-[11px] text-slate-500 truncate">${esc(c.funcao)} &bull; <span class="font-mono">${this.formatCPF(c.cpf)}</span></p>
                             <p class="text-[11px] font-bold text-emerald-600 mt-0.5">R$ ${parseFloat(c.diaria).toLocaleString('pt-BR', {minimumFractionDigits: 2})} / dia</p>
                         </div>
                         <div class="flex flex-col gap-2 shrink-0">
@@ -1446,15 +1570,16 @@
                 const msg = document.getElementById('colab-msg');
 
                 if (!cpf || !nome || !funcao || !diaria) { msg.innerText = 'Preencha todos os campos.'; return; }
+                if (!validarCPF(cpf)) { msg.innerText = 'CPF inválido. Verifique os dígitos.'; return; }
 
                 const btn = document.getElementById('btn-confirmar-colab');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Cadastrando...';
 
                 try {
-                    const res = await fetch('/api/funcionario', {
+                    const res = await authFetch('/api/funcionario', {
                         method: 'POST',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, funcionario: { cpf, nome, funcao, diaria } })
+                        body: JSON.stringify({ funcionario: { cpf, nome, funcao, diaria } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1484,9 +1609,9 @@
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Salvando...';
 
                 try {
-                    const res = await fetch(`/api/funcionario/${encodeURIComponent(this.modoEdicao)}`, {
+                    const res = await authFetch(`/api/funcionario/${encodeURIComponent(this.modoEdicao)}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, funcionario: { nome, funcao, diaria } })
+                        body: JSON.stringify({ funcionario: { nome, funcao, diaria } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1513,9 +1638,8 @@
                 if (!ok) return;
 
                 try {
-                    const res = await fetch(`/api/funcionario/${encodeURIComponent(cpf)}`, {
-                        method: 'DELETE',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache })
+                    const res = await authFetch(`/api/funcionario/${encodeURIComponent(cpf)}`, {
+                        method: 'DELETE'
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1539,7 +1663,7 @@
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Carregando...</td></tr>';
                 cards.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-slate-400 text-xs">Carregando...</div>';
                 try {
-                    const res = await fetch('/api/obras');
+                    const res = await authFetch('/api/obras');
                     this.lista = await res.json();
                     this.render();
                 } catch(e) {
@@ -1571,9 +1695,9 @@
                     const prog = o.progresso ?? null;
                     return `
                     <tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
-                        <td class="p-4 font-mono font-bold text-norest-blue text-xs border-r">${o.id}</td>
-                        <td class="p-4 font-semibold text-slate-700 border-r">${o.nome}</td>
-                        <td class="p-4 text-slate-600 border-r">${o.engenheiro}</td>
+                        <td class="p-4 font-mono font-bold text-norest-blue text-xs border-r">${esc(o.id)}</td>
+                        <td class="p-4 font-semibold text-slate-700 border-r">${esc(o.nome)}</td>
+                        <td class="p-4 text-slate-600 border-r">${esc(o.engenheiro)}</td>
                         <td class="p-4 border-r">
                             <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${sc.cls}">${sc.label}</span>
                             ${prog !== null ? `<div class="flex items-center gap-1.5 mt-1.5"><div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-norest-blue rounded-full" style="width:${prog}%"></div></div><span class="text-[9px] text-slate-400 font-mono">${prog}%</span></div>` : ''}
@@ -1599,11 +1723,11 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 mb-0.5 flex-wrap">
-                                <span class="font-mono text-[10px] font-bold text-norest-blue bg-blue-50 px-1.5 py-0.5 rounded">${o.id}</span>
+                                <span class="font-mono text-[10px] font-bold text-norest-blue bg-blue-50 px-1.5 py-0.5 rounded">${esc(o.id)}</span>
                                 <span class="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${sc.cls}">${sc.label}</span>
                             </div>
-                            <p class="font-bold text-slate-800 text-sm truncate">${o.nome}</p>
-                            <p class="text-[11px] text-slate-500 truncate"><i class="fas fa-hard-hat mr-1"></i>${o.engenheiro}</p>
+                            <p class="font-bold text-slate-800 text-sm truncate">${esc(o.nome)}</p>
+                            <p class="text-[11px] text-slate-500 truncate"><i class="fas fa-hard-hat mr-1"></i>${esc(o.engenheiro)}</p>
                             ${prog !== null ? `<div class="flex items-center gap-1.5 mt-1.5"><div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-norest-blue rounded-full" style="width:${prog}%"></div></div><span class="text-[9px] text-slate-400 font-mono">${prog}%</span></div>` : ''}
                         </div>
                         <div class="flex flex-col gap-2 shrink-0">
@@ -1690,9 +1814,9 @@
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Criando...';
 
                 try {
-                    const res = await fetch('/api/obra', {
+                    const res = await authFetch('/api/obra', {
                         method: 'POST',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { id, nome, engenheiro, ...extras } })
+                        body: JSON.stringify({ obra: { id, nome, engenheiro, ...extras } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1720,9 +1844,9 @@
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Salvando...';
 
                 try {
-                    const res = await fetch(`/api/obra/${encodeURIComponent(this.modoEdicao)}`, {
+                    const res = await authFetch(`/api/obra/${encodeURIComponent(this.modoEdicao)}`, {
                         method: 'PUT',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache, obra: { nome, engenheiro, ...extras } })
+                        body: JSON.stringify({ obra: { nome, engenheiro, ...extras } })
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1755,9 +1879,8 @@
                 if (!ok) return;
 
                 try {
-                    const res = await fetch(`/api/obra/${encodeURIComponent(id)}`, {
-                        method: 'DELETE',
-                        body: JSON.stringify({ username: auth.currentUser, password: auth.passCache })
+                    const res = await authFetch(`/api/obra/${encodeURIComponent(id)}`, {
+                        method: 'DELETE'
                     });
                     const json = await res.json();
                     if (json.error) throw new Error(json.error);
@@ -1795,7 +1918,7 @@
                 }
 
                 try {
-                    const res = await fetch(`/api/adicionais?obra=${encodeURIComponent(obra)}&semana=${encodeURIComponent(semana)}`);
+                    const res = await authFetch(`/api/adicionais?obra=${encodeURIComponent(obra)}&semana=${encodeURIComponent(semana)}`);
                     const data = await res.json();
                     this.itens = data.itens || [];
                 } catch(e) {
@@ -1808,7 +1931,7 @@
 
             novo() {
                 if (!app.config.obraAtiva) return;
-                this.itens.push({ id: Date.now().toString(), descricao: '', valor: 0, criado_em: Date.now() });
+                this.itens.push({ id: crypto.randomUUID(), descricao: '', valor: 0, criado_em: Date.now() });
                 this.render();
                 setTimeout(() => {
                     const inputs = document.querySelectorAll('.adicional-desc-input');
@@ -1830,11 +1953,9 @@
             async salvar() {
                 if (!app.config.obraAtiva) return;
                 try {
-                    await fetch('/api/adicionais', {
+                    await authFetch('/api/adicionais', {
                         method: 'POST',
                         body: JSON.stringify({
-                            username: auth.currentUser,
-                            password: auth.passCache,
                             obra: app.config.obraAtiva,
                             semana: app.config.semanaAtiva,
                             itens: this.itens.map(i => ({
@@ -1869,7 +1990,7 @@
                         <input
                             class="adicional-desc-input flex-1 min-w-0 text-xs text-slate-700 bg-transparent border-b border-transparent focus:border-norest-blue outline-none placeholder-slate-300 py-0.5"
                             placeholder="Descrição (ex: Lanche da equipe, Material de limpeza...)"
-                            value="${(item.descricao || '').replace(/"/g, '&quot;')}"
+                            value="${esc(item.descricao)}"
                             oninput="adicionais._update('${item.id}', 'descricao', this.value)"
                             onblur="adicionais.salvar()"
                         />
@@ -1909,7 +2030,7 @@
                     return;
                 }
                 try {
-                    const res = await fetch(`/api/fotos?obra=${encodeURIComponent(obra)}&semana=${semana}`);
+                    const res = await authFetch(`/api/fotos?obra=${encodeURIComponent(obra)}&semana=${semana}`);
                     const json = await res.json();
                     this.dados = json.fotos || { dom: null, seg: null, ter: null, qua: null, qui: null, sex: null, sab: null };
                 } catch(e) {
@@ -1921,11 +2042,9 @@
             async salvar(dia, url) {
                 this.dados[dia] = url || null;
                 try {
-                    const res = await fetch('/api/fotos', {
+                    const res = await authFetch('/api/fotos', {
                         method: 'POST',
                         body: JSON.stringify({
-                            username: auth.currentUser,
-                            password: auth.passCache,
                             obra: app.config.obraAtiva,
                             semana: app.config.semanaAtiva,
                             fotos: this.dados
@@ -2037,6 +2156,17 @@
             async confirmarLink(dia) {
                 const input = document.getElementById(`foto-input-${dia}`);
                 const url = input?.value?.trim() || null;
+                if (url) {
+                    const FOTO_HOSTS = ['drive.google.com','1drv.ms','onedrive.live.com','dropbox.com','photos.google.com','ibb.co','imgur.com'];
+                    try {
+                        const host = new URL(url).hostname.replace(/^www\./, '');
+                        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
+                        if (!isImage && !FOTO_HOSTS.some(d => host === d || host.endsWith('.' + d))) {
+                            showToast('Domínio não permitido. Use Google Drive, OneDrive, Dropbox ou link direto de imagem.', 'error');
+                            return;
+                        }
+                    } catch { showToast('URL inválida.', 'error'); return; }
+                }
                 this.editandoDia = null;
                 await this.salvar(dia, url);
                 showToast(url ? 'Link de foto salvo!' : 'Foto removida.', url ? 'success' : 'warn');
@@ -2086,8 +2216,8 @@
                 document.getElementById('dash-obras-grid').innerHTML = '<p class="col-span-2 text-center text-slate-300 text-xs py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando dados...</p>';
                 try {
                     const [obrasData, custosData] = await Promise.all([
-                        fetch('/api/obras').then(r => r.json()).catch(() => []),
-                        fetch('/api/custo-obras').then(r => r.json()).catch(() => ({}))
+                        authFetch('/api/obras').then(r => r.json()).catch(() => []),
+                        authFetch('/api/custo-obras').then(r => r.json()).catch(() => ({}))
                     ]);
                     this.obras = Array.isArray(obrasData) ? obrasData : [];
                     this.custos = custosData || {};
@@ -2230,10 +2360,10 @@
                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${sCfg.cls}">
                                             <span class="w-1.5 h-1.5 rounded-full ${sCfg.dot}"></span>${sCfg.label}
                                         </span>
-                                        <span class="font-mono text-[10px] text-norest-blue bg-blue-50 px-1.5 py-0.5 rounded font-bold">${o.id}</span>
+                                        <span class="font-mono text-[10px] text-norest-blue bg-blue-50 px-1.5 py-0.5 rounded font-bold">${esc(o.id)}</span>
                                     </div>
-                                    <p class="font-bold text-slate-800 text-sm leading-tight truncate">${o.nome}</p>
-                                    <p class="text-[11px] text-slate-400 mt-0.5"><i class="fas fa-hard-hat mr-1"></i>${o.engenheiro}</p>
+                                    <p class="font-bold text-slate-800 text-sm leading-tight truncate">${esc(o.nome)}</p>
+                                    <p class="text-[11px] text-slate-400 mt-0.5"><i class="fas fa-hard-hat mr-1"></i>${esc(o.engenheiro)}</p>
                                 </div>
                                 <div class="text-right shrink-0">
                                     <i class="fas ${rCfg.icon} ${rCfg.cls} text-lg" title="${rCfg.label}"></i>
@@ -2304,10 +2434,10 @@
                         const progReal = o.progresso || 0;
                         return `<tr class="hover:bg-slate-50 transition border-b border-gray-100 last:border-0">
                             <td class="p-3 border-r">
-                                <div class="font-bold text-slate-700 text-xs">${o.nome}</div>
-                                <div class="font-mono text-[9px] text-norest-blue">${o.id}</div>
+                                <div class="font-bold text-slate-700 text-xs">${esc(o.nome)}</div>
+                                <div class="font-mono text-[9px] text-norest-blue">${esc(o.id)}</div>
                             </td>
-                            <td class="p-3 text-xs text-slate-600 border-r">${o.engenheiro}</td>
+                            <td class="p-3 text-xs text-slate-600 border-r">${esc(o.engenheiro)}</td>
                             <td class="p-3 text-center border-r">
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${sCfg.cls}">
                                     <span class="w-1.5 h-1.5 rounded-full ${sCfg.dot}"></span>${sCfg.label}
