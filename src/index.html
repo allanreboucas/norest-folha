@@ -1369,16 +1369,21 @@
                 const fmtD = d => String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
                 const nomeArquivo = `${obra?.id || 'obra'}-${fmtD(domData)}-${fmtD(sabData)}.pdf`;
 
-                // Abre PDF em nova aba (evita bloqueio de blob: em iframe por CSP)
-                const blobUrl = doc.output('bloburl');
-                const win = window.open(blobUrl, '_blank');
-                if (!win) {
-                    // Fallback: download direto se popup foi bloqueado
-                    doc.save(nomeArquivo);
-                    showToast('PDF gerado! Verifique os downloads.', 'success');
-                } else {
-                    showToast('PDF aberto em nova aba!', 'success');
-                }
+                // Define título interno do PDF (usado como nome ao salvar do visualizador)
+                doc.setProperties({ title: nomeArquivo.replace('.pdf', '') });
+
+                // Download direto com nome correto + abre preview em nova aba
+                const blob = doc.output('blob');
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = nomeArquivo;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.open(blobUrl, '_blank');
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                showToast('PDF gerado!', 'success');
             },
 
             navigate(viewId) {
