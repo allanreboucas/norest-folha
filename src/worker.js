@@ -39,7 +39,11 @@ export default {
       const token = authHeader.slice(7);
       if (!token) return null;
       const raw = await env.DB.get(`session:${token}`);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const session = JSON.parse(raw);
+      // R2: Renovar TTL da sessão a cada requisição autenticada (sliding window 8h)
+      await env.DB.put(`session:${token}`, raw, { expirationTtl: 28800 });
+      return session;
     }
 
     // =====================================================================
@@ -58,13 +62,15 @@ export default {
       return r === +cpf[10];
     }
 
-    // Helper para respostas JSON com header de segurança
+    // Helper para respostas JSON com headers de segurança (I6)
     function jsonResponse(data, status = 200) {
       return new Response(JSON.stringify(data), {
         status,
         headers: {
           'Content-Type': 'application/json',
           'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Referrer-Policy': 'no-referrer',
         }
       });
     }
@@ -75,14 +81,18 @@ export default {
         headers: {
           "Content-Type": "text/html;charset=UTF-8",
           "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "DENY",
+          "Referrer-Policy": "no-referrer",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+          "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
           "Content-Security-Policy": [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
             "font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com",
-            "img-src * data:",
+            "img-src * data: blob:",
             "frame-src https://drive.google.com https://1drv.ms https://onedrive.live.com https://www.dropbox.com",
-            "connect-src 'self'"
+            "connect-src 'self' https://cdnjs.cloudflare.com"
           ].join('; ')
         },
       });
@@ -196,6 +206,12 @@ export default {
           return jsonResponse({ error: "CPF inválido." }, 400);
         }
 
+        // M4: Validar diária positiva
+        const diaria = parseFloat(funcionario.diaria);
+        if (isNaN(diaria) || diaria <= 0) {
+          return jsonResponse({ error: "Diária deve ser um valor positivo." }, 400);
+        }
+
         const key = `funcionario:${cpf}`;
         const existing = await env.DB.get(key);
         if (existing) {
@@ -221,7 +237,9 @@ export default {
       const session = await authenticate();
       if (!session) return jsonResponse({ error: "Não autorizado" }, 401);
       const keys = await listAll("funcionario:");
-      const items = await Promise.all(keys.map(k => env.DB.get(k.name)));
+      // R5: limitar a 500 registros por segurança de performance
+      const limited = keys.slice(0, 500);
+      const items = await Promise.all(limited.map(k => env.DB.get(k.name)));
       return jsonResponse(items.filter(Boolean).map(JSON.parse));
     }
 
@@ -242,12 +260,18 @@ export default {
           return jsonResponse({ error: "Nome, função e diária são obrigatórios." }, 400);
         }
 
+        // M4: Validar diária positiva no PUT também
+        const diariaEdit = parseFloat(funcionario.diaria);
+        if (isNaN(diariaEdit) || diariaEdit <= 0) {
+          return jsonResponse({ error: "Diária deve ser um valor positivo." }, 400);
+        }
+
         const current = JSON.parse(existing);
         await env.DB.put(key, JSON.stringify({
           ...current,
           nome: funcionario.nome.trim().toUpperCase(),
           funcao: funcionario.funcao.trim().toUpperCase(),
-          diaria: parseFloat(funcionario.diaria),
+          diaria: diariaEdit,
           modificado_por: session.username,
           modificado_em: Date.now()
         }));
