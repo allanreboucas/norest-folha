@@ -891,9 +891,9 @@
                     rows.push(`<tr class="hover:bg-slate-50 transition group">
                         <td class="p-4 text-left border-r group-hover:bg-white transition-colors">
                             <div class="flex items-center justify-between gap-1">
-                                <div>
+                                <div class="flex-1 min-w-0">
                                     <div class="font-bold text-slate-700">${esc(reg.nome)}</div>
-                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter text-center">${esc(reg.funcao)}</div>
+                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter" style="text-align:center">${esc(reg.funcao)}</div>
                                 </div>
                                 <div class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                                     <button onclick="app.moverColab(${idx},-1)" class="text-slate-300 hover:text-slate-500 transition" title="Mover para cima"><i class="fas fa-chevron-up text-[9px]"></i></button>
@@ -1191,12 +1191,11 @@
 
                 // ── Caixas de resumo ──
                 const statY = 33;
-                const statW = (W - ML - MR - 6) / 3;
+                const statW = (W - ML - MR - 3) / 2;
                 const totalAdicionais = adicionais.total();
                 const statConfigs = [
                     { label: 'TOTAL DA SEMANA', value: `R$ ${fmt(totalObra + totalAdicionais)}`, fill: [30, 58, 138] },
                     { label: 'EFETIVO PRESENTE', value: `${totalPresentes} colaboradores`, fill: [5, 150, 105] },
-                    { label: 'MÉDIA POR PESSOA', value: `R$ ${fmt(totalPresentes > 0 ? totalObra / totalPresentes : 0)}`, fill: [71, 85, 105] },
                 ];
                 statConfigs.forEach((s, i) => {
                     const x = ML + i * (statW + 3);
@@ -1242,7 +1241,7 @@
                     alternateRowStyles: { fillColor: [248, 250, 252] },
                     columnStyles: {
                         0: { cellWidth: 40 },
-                        1: { cellWidth: 28 },
+                        1: { cellWidth: 28, halign: 'center' },
                         2: { cellWidth: 20, halign: 'right' },
                         3: { cellWidth: 15, halign: 'center' },
                         4: { cellWidth: 15, halign: 'center' },
@@ -1367,8 +1366,8 @@
                 const semanaKey = this.config.semanaAtiva; // ex: "2026-02-22"
                 const domData = new Date(semanaKey + 'T12:00:00');
                 const sabData = new Date(domData); sabData.setDate(domData.getDate() + 6);
-                const fmtD = d => String(d.getDate()).padStart(2,'0') + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + d.getFullYear();
-                const nomeArquivo = `${obra?.id || 'obra'} - ${fmtD(domData)} a ${fmtD(sabData)}.pdf`;
+                const fmtD = d => String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+                const nomeArquivo = `${obra?.id || 'obra'}-${fmtD(domData)}-${fmtD(sabData)}.pdf`;
 
                 // Abre PDF em nova aba (evita bloqueio de blob: em iframe por CSP)
                 const blobUrl = doc.output('bloburl');
