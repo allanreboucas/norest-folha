@@ -889,20 +889,20 @@
                         : somaDias.toFixed(2);
 
                     rows.push(`<tr class="hover:bg-slate-50 transition group">
-                        <td class="p-4 text-left border-r group-hover:bg-white transition-colors">
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="flex-1 min-w-0">
-                                    <div class="font-bold text-slate-700">${esc(reg.nome)}</div>
-                                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter" style="text-align:center">${esc(reg.funcao)}</div>
-                                </div>
-                                <div class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <td class="p-4 border-r group-hover:bg-white transition-colors" style="position:relative">
+                            <div style="text-align:center">
+                                <div class="font-bold text-slate-700">${esc(reg.nome)}</div>
+                                <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">${esc(reg.funcao)}</div>
+                            </div>
+                            <div class="opacity-0 group-hover:opacity-100 transition-all" style="position:absolute;top:0;bottom:0;right:8px;display:flex;align-items:center;gap:4px">
+                                <div class="flex flex-col gap-0.5">
                                     <button onclick="app.moverColab(${idx},-1)" class="text-slate-300 hover:text-slate-500 transition" title="Mover para cima"><i class="fas fa-chevron-up text-[9px]"></i></button>
                                     <button onclick="app.moverColab(${idx},1)" class="text-slate-300 hover:text-slate-500 transition" title="Mover para baixo"><i class="fas fa-chevron-down text-[9px]"></i></button>
                                 </div>
-                                <button onclick="app.removerColaborador(${idx})" class="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 transition-all shrink-0" title="Remover da folha"><i class="fas fa-times text-[10px]"></i></button>
+                                <button onclick="app.removerColaborador(${idx})" class="text-red-300 hover:text-red-500 transition-all" title="Remover da folha"><i class="fas fa-times text-[10px]"></i></button>
                             </div>
                         </td>
-                        <td class="p-3 text-center text-[10px] text-slate-400 border-r font-mono whitespace-nowrap">R$ ${parseFloat(reg.diaria_historica).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td class="p-3 text-center text-sm text-slate-400 border-r font-mono whitespace-nowrap">R$ ${parseFloat(reg.diaria_historica).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         ${cells}
                         <td class="p-4 bg-slate-50 text-center font-bold text-slate-600 leading-tight">${diasCell}</td>
                         <td class="p-2 bg-amber-50 border-l border-amber-100 text-center td-hex">
@@ -915,7 +915,7 @@
                                     class="w-14 text-center text-[10px] text-amber-500 bg-transparent outline-none border border-amber-100 rounded p-1 focus:border-amber-300">
                             </div>
                         </td>
-                        <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100 whitespace-nowrap">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td class="p-4 bg-blue-50 text-norest-blue font-black border-l border-blue-100 whitespace-nowrap text-center">R$ ${aPagar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                     </tr>`);
 
                     // ── Mobile card ──
